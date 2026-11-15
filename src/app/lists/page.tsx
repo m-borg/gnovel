@@ -86,276 +86,264 @@ export default function ListsPage() {
   const activeListForPicker = state.lists.find((l) => l.id === addingToListId);
 
   return (
-    <div className="container mx-auto max-w-screen-2xl px-4 py-8 space-y-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <h1 className="font-serif text-4xl tracking-tight">Shelves &amp; Lists</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Build ranked top-10s, themed reading orders, and explore editorial spotlights.
-          </p>
-        </div>
-
-        <Button
+    <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
+        <h1 className="text-base sm:text-lg font-bold text-white">
+          Interest Stacks &amp; Custom Lists
+        </h1>
+        <button
           type="button"
           onClick={() => setCreateOpen(!createOpen)}
-          className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold gap-2 self-start sm:self-auto"
+          className="inline-flex items-center gap-1 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           New Custom List
-        </Button>
+        </button>
       </div>
 
-      {/* Create List Drawer */}
-      {createOpen && (
-        <form
-          onSubmit={handleCreate}
-          className="rounded-2xl border border-primary/30 bg-card p-5 space-y-4 max-w-2xl shadow-xl"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-base">Create a Custom List</h2>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(false)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+      <div className="p-3 sm:p-4 space-y-8">
+        {createOpen && (
+          <form
+            onSubmit={handleCreate}
+            className="border border-[#4C74D6] bg-[#161616] p-4 space-y-3 max-w-2xl text-xs"
+          >
+            <div className="flex items-center justify-between border-b border-[#2A2A2A] pb-2">
+              <h2 className="font-bold text-white">Create Custom List</h2>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                className="text-[#9B9B9B] hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-          <div className="space-y-3">
             <Input
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Top 10 Sci-Fi Epics, Halloween Horror Marathon..."
-              className="h-10 bg-secondary/60 border-white/10"
+              placeholder="e.g. Top 10 Sci-Fi Epics, Essential Alan Moore..."
+              className="h-8 bg-[#121212] border-[#333333] text-xs"
             />
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description or reading order notes..."
-              className="w-full rounded-lg border border-white/10 bg-secondary/60 p-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              className="w-full border border-[#333333] bg-[#121212] p-2 text-xs text-white placeholder:text-[#666666] focus:outline-none focus:border-[#4C74D6] resize-none"
             />
-            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+            <label className="inline-flex items-center gap-2 text-xs text-[#CCCCCC] cursor-pointer">
               <input
                 type="checkbox"
                 checked={ranked}
                 onChange={(e) => setRanked(e.target.checked)}
-                className="rounded border-white/20"
               />
-              <ListOrdered className="h-3.5 w-3.5 text-primary" />
-              Numbered / Ranked list (#1, #2, #3...)
+              <ListOrdered className="h-3.5 w-3.5 text-[#8EB4FF]" />
+              Ranked list (#1, #2, #3...)
             </label>
-          </div>
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Create List</Button>
-          </div>
-        </form>
-      )}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <button
+                type="submit"
+                className="px-3 h-8 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold"
+              >
+                Create List
+              </button>
+            </div>
+          </form>
+        )}
 
-      {/* User Lists */}
-      <section className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
+        {/* User Lists */}
+        <section className="space-y-4">
+          <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
             Your Custom Lists ({mounted ? state.lists.length : 0})
           </h2>
-        </div>
 
-        {mounted && state.lists.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-card/40 p-8 text-center text-sm text-muted-foreground">
-            You haven&apos;t created a custom list yet. Click{" "}
-            <strong className="text-foreground">New Custom List</strong> above or use{" "}
-            <strong className="text-foreground">Add to Custom List</strong> on any
-            graphic novel page.
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {state.lists.map((list) => (
-              <div
-                key={list.id}
-                className="rounded-2xl border border-white/10 bg-card/70 p-5 space-y-5"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-white/10 pb-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-serif text-2xl text-foreground">{list.title}</h3>
-                      {list.ranked && (
-                        <span className="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                          Ranked
-                        </span>
+          {mounted && state.lists.length === 0 ? (
+            <div className="border border-[#2C2C2C] bg-[#161616] p-6 text-center text-xs text-[#9B9B9B]">
+              No custom lists yet. Click <strong className="text-white">New Custom List</strong>{" "}
+              above or add titles from any graphic novel page.
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {state.lists.map((list) => (
+                <div
+                  key={list.id}
+                  className="border border-[#2C2C2C] bg-[#161616] p-3.5 space-y-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#262626] pb-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-white">{list.title}</h3>
+                        {list.ranked && (
+                          <span className="bg-[#2E51A2] px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                            Ranked
+                          </span>
+                        )}
+                      </div>
+                      {list.description && (
+                        <p className="text-xs text-[#9B9B9B] mt-0.5">{list.description}</p>
                       )}
                     </div>
-                    {list.description && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {list.description}
-                      </p>
-                    )}
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddingToListId(list.id);
+                          setBookQuery("");
+                          setRemoteBooks([]);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-[2px] border border-[#3A3A3A] bg-[#222222] px-2.5 py-1 text-white hover:bg-[#2E51A2]"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add Entry
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteList(list.id)}
+                        className="p-1 text-[#9B9B9B] hover:text-[#FB7185]"
+                        aria-label={`Delete ${list.title}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setAddingToListId(list.id);
-                        setBookQuery("");
-                        setRemoteBooks([]);
-                      }}
-                      className="gap-1.5 border border-white/10"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Add Book
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteList(list.id)}
-                      className="text-muted-foreground hover:text-rose-400"
-                      aria-label={`Delete ${list.title}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                {list.items.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-4">
-                    This list is empty. Click &ldquo;Add Book&rdquo; to start curating.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {list.items.map((item, idx) => (
-                      <div key={item.novelId} className="space-y-1.5">
-                        <NovelCard
-                          novel={item.novel}
-                          rank={list.ranked ? idx + 1 : undefined}
-                        />
-                        <div className="flex items-center justify-between gap-1 px-1">
-                          <div className="flex items-center gap-1">
+                  {list.items.length === 0 ? (
+                    <p className="text-xs text-[#9B9B9B]">
+                      Empty list — click &ldquo;Add Entry&rdquo; to populate it.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                      {list.items.map((item, idx) => (
+                        <div key={item.novelId} className="space-y-1">
+                          <NovelCard
+                            novel={item.novel}
+                            rank={list.ranked ? idx + 1 : undefined}
+                          />
+                          <div className="flex items-center justify-between text-[10px] px-0.5">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => moveListItem(list.id, idx, -1)}
+                                className="p-0.5 text-[#9B9B9B] hover:text-white disabled:opacity-30"
+                                aria-label="Move up"
+                              >
+                                <ArrowUp className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === list.items.length - 1}
+                                onClick={() => moveListItem(list.id, idx, 1)}
+                                className="p-0.5 text-[#9B9B9B] hover:text-white disabled:opacity-30"
+                                aria-label="Move down"
+                              >
+                                <ArrowDown className="h-3 w-3" />
+                              </button>
+                            </div>
                             <button
                               type="button"
-                              disabled={idx === 0}
-                              onClick={() => moveListItem(list.id, idx, -1)}
-                              className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-30"
-                              aria-label="Move earlier"
+                              onClick={() => toggleNovelInList(list.id, item.novel)}
+                              className="text-[#9B9B9B] hover:text-[#FB7185]"
                             >
-                              <ArrowUp className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === list.items.length - 1}
-                              onClick={() => moveListItem(list.id, idx, 1)}
-                              className="rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:opacity-30"
-                              aria-label="Move later"
-                            >
-                              <ArrowDown className="h-3 w-3" />
+                              Remove
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleNovelInList(list.id, item.novel)}
-                            className="text-[11px] text-muted-foreground hover:text-rose-400"
-                          >
-                            Remove
-                          </button>
                         </div>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Editorial Collections */}
+        <section className="space-y-4">
+          <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+            Editorial Interest Stacks
+          </h2>
+
+          <div className="space-y-4">
+            {EDITORIAL_COLLECTIONS.map((col) => {
+              const novels = col.novelIds
+                .map((id) => getCuratedNovelById(id))
+                .filter(Boolean) as GraphicNovel[];
+              return (
+                <div
+                  key={col.id}
+                  id={col.id}
+                  className={cn(
+                    "border border-[#2C2C2C] bg-gradient-to-b p-3.5 space-y-3 scroll-mt-16",
+                    col.accent
+                  )}
+                >
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-[#8EB4FF]">
+                      {col.curator}
+                    </span>
+                    <h3 className="text-sm font-bold text-white">{col.title}</h3>
+                    <p className="text-xs text-[#9B9B9B]">{col.subtitle}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                    {novels.map((novel) => (
+                      <NovelCard key={novel.id} novel={novel} />
                     ))}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
-        )}
-      </section>
-
-      {/* Editorial Collections */}
-      <section className="space-y-8 pt-6 border-t border-white/10">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Editorial Collections</h2>
-          <p className="text-xs text-muted-foreground">
-            Curated starting points across the graphic novel canon.
-          </p>
-        </div>
-
-        <div className="space-y-8">
-          {EDITORIAL_COLLECTIONS.map((col) => {
-            const novels = col.novelIds
-              .map((id) => getCuratedNovelById(id))
-              .filter(Boolean) as GraphicNovel[];
-            return (
-              <div
-                key={col.id}
-                id={col.id}
-                className={cn(
-                  "rounded-2xl border border-white/10 bg-gradient-to-br p-5 space-y-5 scroll-mt-20",
-                  col.accent
-                )}
-              >
-                <div>
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-primary/90">
-                    {col.curator}
-                  </span>
-                  <h3 className="font-serif text-2xl sm:text-3xl text-foreground">
-                    {col.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">{col.subtitle}</p>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-                  {novels.map((novel) => (
-                    <NovelCard key={novel.id} novel={novel} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* Add Book to List Modal */}
       {activeListForPicker && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setAddingToListId(null);
           }}
         >
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card p-5 space-y-4 max-h-[82vh] flex flex-col">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm truncate">
+          <div className="w-full max-w-lg border border-[#333333] bg-[#181818] p-4 space-y-3 max-h-[82vh] flex flex-col text-xs">
+            <div className="flex items-center justify-between border-b border-[#2C2C2C] pb-2">
+              <h3 className="font-bold text-white truncate">
                 Add to &ldquo;{activeListForPicker.title}&rdquo;
               </h3>
               <button
                 type="button"
                 onClick={() => setAddingToListId(null)}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-[#9B9B9B] hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="relative">
-              <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="h-3.5 w-3.5 text-[#9B9B9B] absolute left-2.5 top-1/2 -translate-y-1/2" />
               <Input
                 autoFocus
                 value={bookQuery}
                 onChange={(e) => handleSearchBooks(e.target.value)}
                 placeholder="Search curated or Open Library..."
-                className="pl-9 h-9 bg-secondary/70 border-white/10"
+                className="pl-8 h-8 bg-[#121212] border-[#333333] text-xs"
               />
             </div>
 
             {searching && (
-              <p className="text-xs text-muted-foreground">Searching Open Library...</p>
+              <p className="text-[11px] text-[#9B9B9B]">Searching Open Library...</p>
             )}
 
             <div className="space-y-1.5 overflow-y-auto pr-1">
@@ -369,13 +357,13 @@ export default function ListsPage() {
                     type="button"
                     onClick={() => toggleNovelInList(activeListForPicker.id, novel)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border p-2 text-left transition-colors",
+                      "flex w-full items-center gap-3 border p-2 text-left transition-colors",
                       included
-                        ? "border-emerald-500/40 bg-emerald-500/10"
-                        : "border-white/5 bg-secondary/40 hover:bg-secondary"
+                        ? "border-[#2DB039]/50 bg-[#2DB039]/10"
+                        : "border-[#2C2C2C] bg-[#141414] hover:border-[#4C74D6]"
                     )}
                   >
-                    <div className="h-12 w-8 shrink-0 rounded overflow-hidden bg-muted">
+                    <div className="h-12 w-8 shrink-0 overflow-hidden bg-[#222222]">
                       {novel.coverUrl && (
                         <img
                           src={novel.coverUrl}
@@ -385,16 +373,16 @@ export default function ListsPage() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{novel.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="font-semibold text-white truncate">{novel.title}</p>
+                      <p className="text-[11px] text-[#9B9B9B] truncate">
                         {novel.writers[0]}
                         {novel.year ? ` · ${novel.year}` : ""}
                       </p>
                     </div>
                     <span
                       className={cn(
-                        "text-xs font-medium px-2 py-1 rounded-md",
-                        included ? "text-emerald-400" : "text-primary"
+                        "text-[11px] font-semibold px-2 py-0.5",
+                        included ? "text-[#4ADE80]" : "text-[#8EB4FF]"
                       )}
                     >
                       {included ? "Added ✓" : "+ Add"}

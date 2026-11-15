@@ -12,15 +12,22 @@ import type {
   UserStoreState,
 } from "./types";
 
-const STORAGE_KEY = "gnovel:v2:state";
+const STORAGE_KEY = "gnovel:v3:state";
+const LEGACY_V2_KEY = "gnovel:v2:state";
 
 const EMPTY_STATE: UserStoreState = {
-  version: 2,
+  version: 3,
   library: {},
   diary: [],
   lists: [],
   favorites: [],
 };
+
+function convertToMal10(rating: number): number {
+  if (!rating || rating <= 0) return 0;
+  if (rating <= 5) return Math.min(10, Math.max(1, Math.round(rating * 2)));
+  return Math.min(10, Math.max(1, Math.round(rating)));
+}
 
 function buildStarterState(): UserStoreState {
   const pick = (id: string) => getCuratedNovelById(id) || CURATED_NOVELS[0];
@@ -35,14 +42,14 @@ function buildStarterState(): UserStoreState {
   const asterios = pick("asterios-polyp");
 
   return {
-    version: 2,
+    version: 3,
     favorites: ["watchmen", "daytripper", "maus", "akira"],
     library: {
       [watchmen.id]: {
         novelId: watchmen.id,
         novel: watchmen,
         status: "completed",
-        rating: 5,
+        rating: 10,
         liked: true,
         issuesRead: 12,
         updatedAt: now,
@@ -51,7 +58,7 @@ function buildStarterState(): UserStoreState {
         novelId: daytripper.id,
         novel: daytripper,
         status: "completed",
-        rating: 5,
+        rating: 10,
         liked: true,
         issuesRead: 10,
         updatedAt: now,
@@ -60,16 +67,16 @@ function buildStarterState(): UserStoreState {
         novelId: maus.id,
         novel: maus,
         status: "completed",
-        rating: 4.5,
+        rating: 9,
         liked: true,
-        issuesRead: 1,
+        issuesRead: 2,
         updatedAt: now,
       },
       [saga.id]: {
         novelId: saga.id,
         novel: saga,
         status: "reading",
-        rating: 4.5,
+        rating: 9,
         liked: true,
         issuesRead: 32,
         updatedAt: now,
@@ -87,7 +94,7 @@ function buildStarterState(): UserStoreState {
         novelId: akira.id,
         novel: akira,
         status: "completed",
-        rating: 4.5,
+        rating: 9,
         liked: true,
         issuesRead: 6,
         updatedAt: now,
@@ -109,7 +116,7 @@ function buildStarterState(): UserStoreState {
         novel: daytripper,
         date: "2026-11-08",
         status: "completed",
-        rating: 5,
+        rating: 10,
         edition: "TPB / Paperback",
         reread: false,
         review:
@@ -123,7 +130,7 @@ function buildStarterState(): UserStoreState {
         novel: saga,
         date: "2026-11-02",
         status: "reading",
-        rating: 4.5,
+        rating: 9,
         edition: "Hardcover / Omnibus",
         reread: false,
         review:
@@ -137,7 +144,7 @@ function buildStarterState(): UserStoreState {
         novel: watchmen,
         date: "2026-10-19",
         status: "completed",
-        rating: 5,
+        rating: 10,
         edition: "Hardcover / Omnibus",
         reread: true,
         review:
@@ -151,7 +158,7 @@ function buildStarterState(): UserStoreState {
         novel: akira,
         date: "2026-09-27",
         status: "completed",
-        rating: 4.5,
+        rating: 9,
         edition: "TPB / Paperback",
         reread: false,
         review:
@@ -199,6 +206,7 @@ interface GNovelContextValue {
   setRating: (novel: GraphicNovel, rating: number) => void;
   toggleLike: (novel: GraphicNovel) => void;
   setProgress: (novel: GraphicNovel, issuesRead: number) => void;
+  setCustomUrl: (novel: GraphicNovel, url: string) => void;
   addDiaryLog: (payload: LogPayload) => void;
   deleteDiaryLog: (logId: string) => void;
   createList: (title: string, description: string, ranked: boolean) => CustomList;
@@ -220,22 +228,61 @@ const STORE_EVENT = "gnovel-store-update";
 let cachedRaw: string | null = null;
 let cachedSnapshot: UserStoreState = EMPTY_STATE;
 
+function migrateV2toV3(v2: {
+  library?: Record<string, LibraryEntry>;
+  diary?: DiaryEntry[];
+  lists?: CustomList[];
+  favorites?: string[];
+}): UserStoreState {
+  const nextLib: Record<string, LibraryEntry> = {};
+  for (const [k, entry] of Object.entries(v2.library || {})) {
+    nextLib[k] = {
+      ...entry,
+      rating: convertToMal10(entry.rating),
+    };
+  }
+  const nextDiary = (v2.diary || []).map((d) => ({
+    ...d,
+    rating: convertToMal10(d.rating),
+  }));
+  return {
+    version: 3,
+    library: nextLib,
+    diary: nextDiary,
+    lists: Array.isArray(v2.lists) ? v2.lists : [],
+    favorites: Array.isArray(v2.favorites) ? v2.favorites : [],
+  };
+}
+
 function getClientSnapshot(): UserStoreState {
   if (typeof window === "undefined") return EMPTY_STATE;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === cachedRaw) return cachedSnapshot;
-    cachedRaw = raw;
+    if (raw === cachedRaw && raw !== null) return cachedSnapshot;
     if (raw) {
+      cachedRaw = raw;
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.version === 2) {
+      if (parsed && parsed.version === 3) {
         cachedSnapshot = parsed;
+        return cachedSnapshot;
+      }
+    }
+    const legacy = localStorage.getItem(LEGACY_V2_KEY);
+    if (legacy) {
+      const parsedV2 = JSON.parse(legacy);
+      if (parsedV2 && parsedV2.version === 2) {
+        const migrated = migrateV2toV3(parsedV2);
+        const migratedRaw = JSON.stringify(migrated);
+        localStorage.setItem(STORAGE_KEY, migratedRaw);
+        cachedRaw = migratedRaw;
+        cachedSnapshot = migrated;
         return cachedSnapshot;
       }
     }
   } catch {
     // Ignore malformed storage
   }
+  cachedRaw = null;
   cachedSnapshot = EMPTY_STATE;
   return cachedSnapshot;
 }
@@ -291,7 +338,9 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
   const upsertLibrary = useCallback(
     (
       novel: GraphicNovel,
-      patch: Partial<Pick<LibraryEntry, "status" | "rating" | "liked" | "issuesRead">>
+      patch: Partial<
+        Pick<LibraryEntry, "status" | "rating" | "liked" | "issuesRead" | "customUrl">
+      >
     ) => {
       updateState((prev) => {
         const existing = prev.library[novel.id];
@@ -302,6 +351,7 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
           rating: patch.rating ?? existing?.rating ?? 0,
           liked: patch.liked ?? existing?.liked ?? false,
           issuesRead: patch.issuesRead ?? existing?.issuesRead ?? 0,
+          customUrl: patch.customUrl !== undefined ? patch.customUrl : existing?.customUrl,
           updatedAt: new Date().toISOString(),
         };
 
@@ -310,7 +360,8 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
           nextEntry.status === "none" &&
           nextEntry.rating === 0 &&
           !nextEntry.liked &&
-          nextEntry.issuesRead === 0
+          nextEntry.issuesRead === 0 &&
+          !nextEntry.customUrl
         ) {
           delete library[novel.id];
         } else {
@@ -327,7 +378,9 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
       const existing = state.library[novel.id];
       const nextStatus = existing?.status === status ? "none" : status;
       const autoProgress =
-        nextStatus === "completed" && novel.issues && (!existing?.issuesRead || existing.issuesRead < novel.issues)
+        nextStatus === "completed" &&
+        novel.issues &&
+        (!existing?.issuesRead || existing.issuesRead < novel.issues)
           ? novel.issues
           : existing?.issuesRead ?? 0;
       upsertLibrary(novel, { status: nextStatus, issuesRead: autoProgress });
@@ -337,15 +390,15 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
 
   const setRating = useCallback(
     (novel: GraphicNovel, rating: number) => {
+      const cleanRating = Math.max(0, Math.min(10, Math.round(rating)));
       const existing = state.library[novel.id];
-      const nextRating = existing?.rating === rating ? 0 : rating;
       const nextStatus =
         existing?.status && existing.status !== "none"
           ? existing.status
-          : nextRating > 0
+          : cleanRating > 0
           ? "completed"
           : "none";
-      upsertLibrary(novel, { rating: nextRating, status: nextStatus });
+      upsertLibrary(novel, { rating: cleanRating, status: nextStatus });
     },
     [state.library, upsertLibrary]
   );
@@ -373,6 +426,13 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
     [state.library, upsertLibrary]
   );
 
+  const setCustomUrl = useCallback(
+    (novel: GraphicNovel, url: string) => {
+      upsertLibrary(novel, { customUrl: url.trim() || undefined });
+    },
+    [upsertLibrary]
+  );
+
   const addDiaryLog = useCallback(
     (payload: LogPayload) => {
       updateState((prev) => {
@@ -382,7 +442,7 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
           novel: payload.novel,
           date: payload.date,
           status: payload.status,
-          rating: payload.rating,
+          rating: Math.max(0, Math.min(10, Math.round(payload.rating))),
           edition: payload.edition,
           reread: payload.reread,
           review: payload.review.trim(),
@@ -402,9 +462,10 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
           novelId: payload.novel.id,
           novel: payload.novel,
           status: payload.status,
-          rating: payload.rating || existing?.rating || 0,
+          rating: entry.rating || existing?.rating || 0,
           liked: payload.liked ?? existing?.liked ?? false,
           issuesRead: autoIssues,
+          customUrl: existing?.customUrl,
           updatedAt: new Date().toISOString(),
         };
 
@@ -414,8 +475,8 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
             ...prev.library,
             [payload.novel.id]: nextLibrary,
           },
-          diary: [entry, ...prev.diary].sort((a, b) =>
-            b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
+          diary: [entry, ...prev.diary].sort(
+            (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)
           ),
         };
       });
@@ -503,7 +564,6 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
         const next = [...prev.favorites];
         while (next.length < 4) next.push("");
         if (novelId) {
-          // Remove duplicates first
           for (let i = 0; i < 4; i++) {
             if (next[i] === novelId) next[i] = "";
           }
@@ -534,15 +594,17 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
     (raw: string): { ok: boolean; error?: string } => {
       try {
         const parsed = JSON.parse(raw);
-        if (!parsed || parsed.version !== 2 || typeof parsed.library !== "object") {
+        if (!parsed || typeof parsed.library !== "object") {
           return { ok: false, error: "Invalid GNovel backup file format." };
         }
+        const normalized =
+          parsed.version === 2 ? migrateV2toV3(parsed) : (parsed as UserStoreState);
         updateState(() => ({
-          version: 2,
-          library: parsed.library || {},
-          diary: Array.isArray(parsed.diary) ? parsed.diary : [],
-          lists: Array.isArray(parsed.lists) ? parsed.lists : [],
-          favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+          version: 3,
+          library: normalized.library || {},
+          diary: Array.isArray(normalized.diary) ? normalized.diary : [],
+          lists: Array.isArray(normalized.lists) ? normalized.lists : [],
+          favorites: Array.isArray(normalized.favorites) ? normalized.favorites : [],
         }));
         return { ok: true };
       } catch {
@@ -562,6 +624,7 @@ export function GNovelProvider({ children }: { children: React.ReactNode }) {
         setRating,
         toggleLike,
         setProgress,
+        setCustomUrl,
         addDiaryLog,
         deleteDiaryLog,
         createList,

@@ -1,7 +1,7 @@
-import type { GraphicNovel, NovelFormat } from "./types";
+import type { GraphicNovel, NovelFormat, OpenLibraryEnrichment } from "./types";
 
 interface OLSearchDoc {
-  key: string; // e.g. "/works/OL2897798W"
+  key: string;
   title: string;
   subtitle?: string;
   author_name?: string[];
@@ -22,7 +22,16 @@ interface OLWorkDetail {
   first_publish_date?: string;
 }
 
-const CACHE_KEY = "gnovel:ol-cache:v1";
+interface OLEditionDoc {
+  key: string;
+  title?: string;
+  publishers?: string[];
+  publish_date?: string;
+  number_of_pages?: number;
+  physical_format?: string;
+}
+
+const CACHE_KEY = "gnovel:ol-cache:v2";
 
 function inferFormat(subjects: string[] = [], title = ""): NovelFormat {
   const joined = `${subjects.join(" ")} ${title}`.toLowerCase();
@@ -64,7 +73,6 @@ export function cacheNovelSnapshot(novel: GraphicNovel) {
     const raw = localStorage.getItem(CACHE_KEY);
     const map: Record<string, GraphicNovel> = raw ? JSON.parse(raw) : {};
     map[novel.id] = novel;
-    // Keep cache bounded to 80 items
     const keys = Object.keys(map);
     if (keys.length > 80) {
       delete map[keys[0]];
@@ -108,7 +116,6 @@ export async function searchOpenLibrary(
   const data = await res.json();
   const docs: OLSearchDoc[] = data.docs || [];
 
-  // Fallback to unfiltered query if strict comics subject filter yields 0 results
   if (comicsOnly && docs.length === 0) {
     return searchOpenLibrary(trimmed, false, signal);
   }
@@ -128,15 +135,19 @@ export async function searchOpenLibrary(
         artists: writers,
         publisher: doc.publisher?.[0] || "Independent / Archive",
         year: doc.first_publish_year || 0,
+        publicationStatus: "Finished",
         pages: doc.number_of_pages_median,
         format: inferFormat(doc.subject, doc.title),
         genres: cleanGenres(doc.subject),
-        deck: doc.subtitle || `Cataloged edition archived in Open Library (${doc.edition_count || 1} editions).`,
+        deck:
+          doc.subtitle ||
+          `Archived graphic novel work (${doc.edition_count || 1} known editions on Open Library).`,
         synopsis:
-          "Loaded from the Open Library community archive. Open this entry to view the full work synopsis and log it to your shelf or reading diary.",
+          "Loaded from the Open Library community archive. Open this entry to view live community ratings, published editions, and synopsis.",
         coverUrl: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
-        communityScore: 4.1,
+        communityScore: 7.85,
         ratingsCount: (doc.edition_count || 1) * 45,
+        membersCount: (doc.edition_count || 1) * 180,
         isCurated: false,
       };
       cacheNovelSnapshot(novel);
@@ -173,13 +184,15 @@ export async function fetchOpenLibraryWork(
       year: data.first_publish_date
         ? parseInt(data.first_publish_date.match(/\d{4}/)?.[0] || "0", 10)
         : 0,
+      publicationStatus: "Finished",
       format: inferFormat(data.subjects, data.title),
       genres: cleanGenres(data.subjects),
       deck: cleanDesc.slice(0, 160) || "Archived graphic novel work.",
       synopsis: cleanDesc || "No synopsis available on Open Library yet.",
       coverUrl: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : "",
-      communityScore: 4.1,
+      communityScore: 7.85,
       ratingsCount: 120,
+      membersCount: 450,
       isCurated: false,
     };
 
@@ -189,12 +202,70 @@ export async function fetchOpenLibraryWork(
       genres: data.subjects?.length ? cleanGenres(data.subjects) : base.genres,
       synopsis: cleanDesc || base.synopsis,
       deck: base.deck || cleanDesc.slice(0, 150),
-      coverUrl: base.coverUrl || (coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : ""),
+      coverUrl:
+        base.coverUrl ||
+        (coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : ""),
     };
 
     cacheNovelSnapshot(enriched);
     return enriched;
   } catch {
     return fallback || null;
+  }
+}
+
+export async function fetchOpenLibraryEnrichment(
+  olId: string
+): Promise<OpenLibraryEnrichment | null> {
+  const cleanId = extractOlId(olId);
+  try {
+    const [ratingsRes, shelvesRes, editionsRes] = await Promise.allSettled([
+      fetch(`https://openlibrary.org/works/${cleanId}/ratings.json`),
+      fetch(`https://openlibrary.org/works/${cleanId}/bookshelves.json`),
+      fetch(`https://openlibrary.org/works/${cleanId}/editions.json?limit=16`),
+    ]);
+
+    const result: OpenLibraryEnrichment = { editions: [] };
+
+    if (ratingsRes.status === "fulfilled" && ratingsRes.value.ok) {
+      const rData = await ratingsRes.value.json();
+      if (rData?.summary?.average) {
+        result.average10 = Number((rData.summary.average * 2).toFixed(2));
+        result.ratingsCount = rData.summary.count || 0;
+        result.ratingCounts = rData.counts || undefined;
+      }
+    }
+
+    if (shelvesRes.status === "fulfilled" && shelvesRes.value.ok) {
+      const sData = await shelvesRes.value.json();
+      const c = sData?.counts;
+      if (c) {
+        result.wantToRead = c.want_to_read || 0;
+        result.currentlyReading = c.currently_reading || 0;
+        result.alreadyRead = c.already_read || 0;
+        result.members =
+          (c.want_to_read || 0) +
+          (c.currently_reading || 0) +
+          (c.already_read || 0) +
+          (c.stopped_reading || 0);
+      }
+    }
+
+    if (editionsRes.status === "fulfilled" && editionsRes.value.ok) {
+      const eData = await editionsRes.value.json();
+      const entries: OLEditionDoc[] = eData?.entries || [];
+      result.editions = entries.map((e) => ({
+        key: e.key,
+        title: e.title || "Edition",
+        publishers: e.publishers || [],
+        publishDate: e.publish_date,
+        pages: e.number_of_pages,
+        format: e.physical_format,
+      }));
+    }
+
+    return result;
+  } catch {
+    return null;
   }
 }

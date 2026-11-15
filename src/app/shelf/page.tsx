@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BookMarked,
-  Compass,
+  ExternalLink,
   Heart,
   LayoutGrid,
   List as ListIcon,
@@ -14,10 +14,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NovelCard, getNovelHref } from "@/components/NovelCard";
-import { StarRating } from "@/components/StarRating";
 import { LogModal } from "@/components/LogModal";
 import { CURATED_NOVELS, getCuratedNovelById } from "@/lib/catalog";
-import { STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
+import { MAL_SCORE_LABELS, STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
 import type { GraphicNovel, LibraryEntry, ReadingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,14 +24,21 @@ import { cn } from "@/lib/utils";
 type ShelfFilter = "all" | "favorites" | Exclude<ReadingStatus, "none">;
 type ShelfSort = "updated" | "rating" | "year" | "title";
 
-const RATING_STEPS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+const SCORE_STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function ShelfPage() {
-  const { state, mounted, setFavoriteSlot, loadStarterShelf } = useGNovel();
+  const {
+    state,
+    mounted,
+    setFavoriteSlot,
+    setRating,
+    setProgress,
+    loadStarterShelf,
+  } = useGNovel();
 
   const [filter, setFilter] = useState<ShelfFilter>("all");
   const [sortBy, setSortBy] = useState<ShelfSort>("updated");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [pickingSlot, setPickingSlot] = useState<number | null>(null);
   const [logNovel, setLogNovel] = useState<GraphicNovel | null>(null);
 
@@ -49,7 +55,7 @@ export default function ShelfPage() {
         : 0;
     const issuesRead = entries.reduce((sum, e) => sum + (e.issuesRead || 0), 0);
 
-    const buckets = RATING_STEPS.map((step) => ({
+    const buckets = SCORE_STEPS.map((step) => ({
       step,
       count: rated.filter((e) => e.rating === step).length,
     }));
@@ -98,160 +104,162 @@ export default function ShelfPage() {
 
   if (!mounted) {
     return (
-      <div className="container mx-auto max-w-screen-2xl px-4 py-12">
-        <div className="h-48 rounded-2xl bg-card animate-pulse" />
+      <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-6">
+        <div className="h-48 bg-[#1C1C1C] animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-screen-2xl px-4 py-8 space-y-10">
-      {/* Header & Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Four Favorites */}
-        <div className="lg:col-span-5 rounded-2xl border border-white/10 bg-card p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="font-serif text-2xl tracking-tight">Four Favorites</h1>
-              <p className="text-xs text-muted-foreground">
-                Your signature shelf — click any frame to swap.
-              </p>
-            </div>
-            <Heart className="h-4 w-4 text-rose-400 fill-rose-400" />
-          </div>
+    <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
+      {/* Title Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
+        <h1 className="text-base sm:text-lg font-bold text-white">
+          My Graphic Novel List &amp; Stats
+        </h1>
+        <span className="font-mono text-xs text-[#9B9B9B]">
+          Mean Score:{" "}
+          <strong className="text-white">
+            {stats.avgRating > 0 ? stats.avgRating.toFixed(2) : "—"}
+          </strong>
+        </span>
+      </div>
 
-          <div className="grid grid-cols-4 gap-2.5">
-            {[0, 1, 2, 3].map((slot) => {
-              const favId = state.favorites[slot];
-              const favNovel = favId ? resolveNovel(favId) : undefined;
-              return (
-                <div key={slot} className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => setPickingSlot(slot)}
-                    className="aspect-[2/3] w-full overflow-hidden rounded-xl border border-dashed border-white/15 bg-secondary/40 hover:border-primary/60 transition-all flex items-center justify-center relative"
-                  >
-                    {favNovel ? (
-                      <>
-                        <img
-                          src={favNovel.coverUrl}
-                          alt={favNovel.title}
-                          className="h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[11px] font-medium text-white px-1 text-center">
-                          Swap
-                        </div>
-                      </>
-                    ) : (
-                      <Plus className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </button>
-                  {favNovel && (
+      <div className="p-3 sm:p-4 space-y-6">
+        {/* Top Profile Strip: Favorites + Stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Favorites */}
+          <div className="lg:col-span-5 border border-[#2C2C2C] bg-[#161616] p-3 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-[#252525] pb-1.5">
+              <h2 className="text-xs font-bold text-white">Favorite Graphic Novels</h2>
+              <Heart className="h-3.5 w-3.5 text-[#FB7185] fill-[#FB7185]" />
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {[0, 1, 2, 3].map((slot) => {
+                const favId = state.favorites[slot];
+                const favNovel = favId ? resolveNovel(favId) : undefined;
+                return (
+                  <div key={slot} className="relative group">
                     <button
                       type="button"
-                      onClick={() => setFavoriteSlot(slot, null)}
-                      title="Remove favorite"
-                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-card border border-white/20 text-muted-foreground hover:text-foreground hidden group-hover:flex items-center justify-center shadow"
+                      onClick={() => setPickingSlot(slot)}
+                      className="aspect-[2/3] w-full overflow-hidden border border-[#333333] bg-[#1C1C1C] hover:border-[#4C74D6] flex items-center justify-center relative"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Reader Stats + Rating Distribution */}
-        <div className="lg:col-span-7 rounded-2xl border border-white/10 bg-card p-5 space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="rounded-xl bg-secondary/40 border border-white/5 p-3">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground block">
-                Tracked
-              </span>
-              <span className="text-2xl font-bold font-mono text-foreground">
-                {stats.total}
-              </span>
-            </div>
-            <div className="rounded-xl bg-secondary/40 border border-white/5 p-3">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground block">
-                Completed
-              </span>
-              <span className="text-2xl font-bold font-mono text-emerald-400">
-                {stats.completed}
-              </span>
-            </div>
-            <div className="rounded-xl bg-secondary/40 border border-white/5 p-3">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground block">
-                Reading
-              </span>
-              <span className="text-2xl font-bold font-mono text-sky-400">
-                {stats.reading}
-              </span>
-            </div>
-            <div className="rounded-xl bg-secondary/40 border border-white/5 p-3">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground block">
-                Issues Read
-              </span>
-              <span className="text-2xl font-bold font-mono text-foreground">
-                {stats.issuesRead}
-              </span>
-            </div>
-            <div className="rounded-xl bg-secondary/40 border border-white/5 p-3 col-span-2 sm:col-span-1">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground block">
-                Mean Rating
-              </span>
-              <span className="text-2xl font-bold font-mono text-primary">
-                {stats.avgRating > 0 ? stats.avgRating.toFixed(1) : "—"}
-              </span>
-            </div>
-          </div>
-
-          {/* Letterboxd-style Half-Star Distribution */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span className="uppercase tracking-wider font-semibold text-[11px]">
-                Rating Distribution
-              </span>
-              <span className="font-mono">0.5 ★ — 5.0 ★</span>
-            </div>
-            <div className="flex items-end gap-1.5 h-16 pt-2">
-              {stats.buckets.map((b) => {
-                const heightPct =
-                  b.count > 0 ? Math.max(18, Math.round((b.count / stats.maxBucket) * 100)) : 8;
-                return (
-                  <div
-                    key={b.step}
-                    className="flex-1 flex flex-col items-center gap-1 h-full justify-end"
-                    title={`${b.step.toFixed(1)} ★: ${b.count}`}
-                  >
-                    <div
-                      className={cn(
-                        "w-full rounded-t-sm transition-all",
-                        b.count > 0 ? "bg-primary/85 hover:bg-primary" : "bg-white/10"
+                      {favNovel ? (
+                        <>
+                          <img
+                            src={favNovel.coverUrl}
+                            alt={favNovel.title}
+                            className="h-full w-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-semibold text-white">
+                            Swap
+                          </div>
+                        </>
+                      ) : (
+                        <Plus className="h-4 w-4 text-[#666666]" />
                       )}
-                      style={{ height: `${heightPct}%` }}
-                    />
+                    </button>
+                    {favNovel && (
+                      <button
+                        type="button"
+                        onClick={() => setFavoriteSlot(slot, null)}
+                        title="Remove favorite"
+                        className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[#222222] border border-[#444444] text-[#CCCCCC] hover:text-white hidden group-hover:flex items-center justify-center"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Shelf Controls */}
-      <div className="space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          {/* Stats & Score Distribution (1-10) */}
+          <div className="lg:col-span-7 border border-[#2C2C2C] bg-[#161616] p-3 space-y-3">
+            <h2 className="border-b border-[#252525] pb-1.5 text-xs font-bold text-white">
+              Graphic Novel Stats
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+              <div className="border border-[#262626] bg-[#121212] p-2">
+                <span className="text-[10px] text-[#9B9B9B] block">Total Entries</span>
+                <span className="font-mono text-base font-bold text-white">
+                  {stats.total}
+                </span>
+              </div>
+              <div className="border border-[#262626] bg-[#121212] p-2">
+                <span className="text-[10px] text-[#9B9B9B] block">Reading</span>
+                <span className="font-mono text-base font-bold text-[#4ADE80]">
+                  {stats.reading}
+                </span>
+              </div>
+              <div className="border border-[#262626] bg-[#121212] p-2">
+                <span className="text-[10px] text-[#9B9B9B] block">Completed</span>
+                <span className="font-mono text-base font-bold text-[#8EB4FF]">
+                  {stats.completed}
+                </span>
+              </div>
+              <div className="border border-[#262626] bg-[#121212] p-2">
+                <span className="text-[10px] text-[#9B9B9B] block">Plan to Read</span>
+                <span className="font-mono text-base font-bold text-[#CCCCCC]">
+                  {stats.plan}
+                </span>
+              </div>
+              <div className="border border-[#262626] bg-[#121212] p-2 col-span-2 sm:col-span-1">
+                <span className="text-[10px] text-[#9B9B9B] block">Issues Read</span>
+                <span className="font-mono text-base font-bold text-[#FACC15]">
+                  {stats.issuesRead}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-[#9B9B9B]">
+                <span>Score Distribution (1–10)</span>
+                <span className="font-mono">1 → 10</span>
+              </div>
+              <div className="flex items-end gap-1 h-14 pt-1">
+                {stats.buckets.map((b) => {
+                  const pct =
+                    b.count > 0
+                      ? Math.max(18, Math.round((b.count / stats.maxBucket) * 100))
+                      : 8;
+                  return (
+                    <div
+                      key={b.step}
+                      className="flex-1 flex flex-col items-center justify-end h-full gap-1"
+                      title={`Score ${b.step}: ${b.count}`}
+                    >
+                      <div
+                        className={cn(
+                          "w-full transition-all",
+                          b.count > 0 ? "bg-[#2E51A2] hover:bg-[#4C74D6]" : "bg-[#242424]"
+                        )}
+                        style={{ height: `${pct}%` }}
+                      />
+                      <span className="font-mono text-[9px] text-[#777777]">{b.step}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* MAL Status Filter Tabs & Sort */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#2A2A2A] pb-3">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
             <button
               type="button"
               onClick={() => setFilter("all")}
               className={cn(
-                "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
+                "shrink-0 px-3 py-1 rounded-[2px] border",
                 filter === "all"
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-secondary/50 text-muted-foreground border-white/5 hover:text-foreground"
+                  ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
+                  : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
               )}
             >
               All ({entries.length})
@@ -265,10 +273,10 @@ export default function ShelfPage() {
                   type="button"
                   onClick={() => setFilter(opt.value)}
                   className={cn(
-                    "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
+                    "shrink-0 px-3 py-1 rounded-[2px] border",
                     filter === opt.value
-                      ? opt.badgeClass
-                      : "bg-secondary/50 text-muted-foreground border-white/5 hover:text-foreground"
+                      ? opt.badgeClass + " font-semibold"
+                      : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
                   )}
                 >
                   {opt.label} ({count})
@@ -280,92 +288,217 @@ export default function ShelfPage() {
               type="button"
               onClick={() => setFilter("favorites")}
               className={cn(
-                "shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium border transition-colors",
+                "shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-[2px] border",
                 filter === "favorites"
-                  ? "bg-rose-500/15 text-rose-400 border-rose-500/30"
-                  : "bg-secondary/50 text-muted-foreground border-white/5 hover:text-foreground"
+                  ? "bg-[#FB7185]/20 border-[#FB7185]/40 text-[#FB7185] font-semibold"
+                  : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
               )}
             >
               <Heart className="h-3 w-3" />
-              Likes ({entries.filter((e) => e.liked).length})
+              Favorites ({entries.filter((e) => e.liked).length})
             </button>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 text-xs shrink-0">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as ShelfSort)}
               aria-label="Sort shelf"
-              className="h-8 rounded-lg border border-white/10 bg-secondary/50 px-2.5 text-xs font-medium text-foreground focus:outline-none"
+              className="h-7 rounded-[2px] border border-[#333333] bg-[#1A1A1A] px-2 text-xs text-white"
             >
-              <option value="updated" className="bg-card">Recently Updated</option>
-              <option value="rating" className="bg-card">Your Rating</option>
-              <option value="year" className="bg-card">Release Year</option>
-              <option value="title" className="bg-card">Title A–Z</option>
+              <option value="updated">Sort: Recently Updated</option>
+              <option value="rating">Sort: Your Score</option>
+              <option value="year">Sort: Release Year</option>
+              <option value="title">Sort: Title A–Z</option>
             </select>
 
-            <div className="inline-flex rounded-lg border border-white/10 bg-secondary/50 p-0.5">
+            <div className="inline-flex border border-[#333333] bg-[#1A1A1A] p-0.5 rounded-[2px]">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={cn(
+                  "p-1 rounded-[1px]",
+                  viewMode === "table" ? "bg-[#2E51A2] text-white" : "text-[#9B9B9B]"
+                )}
+                aria-label="MAL Table View"
+              >
+                <ListIcon className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
                 className={cn(
-                  "rounded-md p-1.5",
-                  viewMode === "grid" ? "bg-card text-foreground" : "text-muted-foreground"
+                  "p-1 rounded-[1px]",
+                  viewMode === "grid" ? "bg-[#2E51A2] text-white" : "text-[#9B9B9B]"
                 )}
-                aria-label="Grid view"
+                aria-label="Grid View"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "rounded-md p-1.5",
-                  viewMode === "list" ? "bg-card text-foreground" : "text-muted-foreground"
-                )}
-                aria-label="List view"
-              >
-                <ListIcon className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Empty State vs Items */}
+        {/* List / Empty State */}
         {entries.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-card/40 p-12 text-center space-y-4">
-            <BookMarked className="h-10 w-10 text-primary/80 mx-auto" />
-            <div className="space-y-1">
-              <h2 className="font-serif text-2xl">Your shelf is waiting</h2>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Discover graphic novels and hover any cover to mark it Read, Backlog, or
-                Liked—or load a sample shelf to explore the stats right away.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <div className="border border-[#2C2C2C] bg-[#161616] p-10 text-center space-y-3">
+            <BookMarked className="h-8 w-8 text-[#8EB4FF] mx-auto" />
+            <h2 className="text-base font-bold text-white">Your Shelf Is Empty</h2>
+            <p className="text-xs text-[#9B9B9B] max-w-md mx-auto">
+              Add graphic novels from the catalog or load a sample shelf to preview MAL
+              stats and list tracking.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-1">
               <Link href="/">
-                <Button className="gap-2">
-                  <Compass className="h-4 w-4" />
-                  Browse Discover
+                <Button size="sm" className="bg-[#2E51A2] hover:bg-[#3A62BE] text-white">
+                  Browse Graphic Novels
                 </Button>
               </Link>
               <Button
                 type="button"
+                size="sm"
                 variant="secondary"
                 onClick={loadStarterShelf}
-                className="gap-2 border border-white/10"
+                className="gap-1.5"
               >
-                <Sparkles className="h-4 w-4 text-emerald-400" />
+                <Sparkles className="h-3.5 w-3.5 text-[#4ADE80]" />
                 Load Sample Shelf
               </Button>
             </div>
           </div>
         ) : filteredEntries.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-card/40 p-10 text-center text-sm text-muted-foreground">
-            No graphic novels in this category yet.
+          <div className="border border-[#2C2C2C] bg-[#161616] p-8 text-center text-xs text-[#9B9B9B]">
+            No entries in this status tab yet.
           </div>
-        ) : viewMode === "grid" ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
+        ) : viewMode === "table" ? (
+          <div className="overflow-x-auto border border-[#2C2C2C]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#2E51A2] text-white text-[11px] font-bold">
+                  <th className="w-1.5 p-0"></th>
+                  <th className="py-2 px-2 w-10 text-center">#</th>
+                  <th className="py-2 px-2 w-14">Image</th>
+                  <th className="py-2 px-3">Title</th>
+                  <th className="py-2 px-3 w-36 text-center">Score</th>
+                  <th className="py-2 px-3 w-24 text-center hidden sm:table-cell">Type</th>
+                  <th className="py-2 px-3 w-28 text-center">Progress</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#252525] bg-[#141414]">
+                {filteredEntries.map((entry: LibraryEntry, idx) => {
+                  const meta = getStatusMeta(entry.status);
+                  const total = entry.novel.issues || 0;
+                  return (
+                    <tr
+                      key={entry.novelId}
+                      className="hover:bg-[#1B1B1B] transition-colors"
+                    >
+                      <td className={cn("w-1.5 p-0", meta?.stripColor || "bg-[#333333]")} />
+                      <td className="py-2 px-2 text-center font-mono text-[#9B9B9B]">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2 px-2">
+                        <Link
+                          href={getNovelHref(entry.novel)}
+                          className="block w-10 h-14 border border-[#333333] bg-[#222222] overflow-hidden"
+                        >
+                          {entry.novel.coverUrl && (
+                            <img
+                              src={entry.novel.coverUrl}
+                              alt={entry.novel.title}
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </Link>
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={getNovelHref(entry.novel)}
+                              className="font-bold mal-link"
+                            >
+                              {entry.novel.title}
+                            </Link>
+                            {entry.liked && (
+                              <Heart className="h-3 w-3 fill-[#FB7185] text-[#FB7185] shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#9B9B9B]">
+                            <span>{entry.novel.writers[0]}</span>
+                            <button
+                              type="button"
+                              onClick={() => setLogNovel(entry.novel)}
+                              className="mal-link"
+                            >
+                              Edit / Log
+                            </button>
+                            {entry.customUrl && (
+                              <a
+                                href={entry.customUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-0.5 text-[#4ADE80] hover:underline"
+                              >
+                                Read <ExternalLink className="h-2.5 w-2.5" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-2 px-3 text-center">
+                        <select
+                          value={entry.rating}
+                          onChange={(e) =>
+                            setRating(entry.novel, Number(e.target.value))
+                          }
+                          aria-label={`Score for ${entry.novel.title}`}
+                          className="h-7 w-full rounded-[2px] border border-[#333333] bg-[#1A1A1A] px-1.5 text-[11px] text-white"
+                        >
+                          <option value={0}>—</option>
+                          {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
+                            <option key={n} value={n}>
+                              {MAL_SCORE_LABELS[n]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td className="py-2 px-3 text-center hidden sm:table-cell text-[#CCCCCC]">
+                        {entry.novel.format}
+                      </td>
+
+                      <td className="py-2 px-3 text-center font-mono">
+                        <div className="inline-flex items-center gap-1.5">
+                          <span className="text-white">
+                            {entry.issuesRead} / {total || "?"}
+                          </span>
+                          <button
+                            type="button"
+                            title="Increment +1"
+                            onClick={() =>
+                              setProgress(
+                                entry.novel,
+                                total
+                                  ? Math.min(total, entry.issuesRead + 1)
+                                  : entry.issuesRead + 1
+                              )
+                            }
+                            className="flex h-5 w-5 items-center justify-center rounded-[2px] bg-[#222222] border border-[#3A3A3A] text-[#8EB4FF] hover:bg-[#2E51A2] hover:text-white"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
             {filteredEntries.map((entry) => (
               <NovelCard
                 key={entry.novelId}
@@ -374,90 +507,31 @@ export default function ShelfPage() {
               />
             ))}
           </div>
-        ) : (
-          <div className="rounded-2xl border border-white/10 bg-card overflow-hidden divide-y divide-white/5">
-            {filteredEntries.map((entry: LibraryEntry) => {
-              const meta = getStatusMeta(entry.status);
-              return (
-                <div
-                  key={entry.novelId}
-                  className="flex items-center gap-4 p-3.5 hover:bg-white/[0.02] transition-colors"
-                >
-                  <Link
-                    href={getNovelHref(entry.novel)}
-                    className="h-16 w-11 shrink-0 rounded-md overflow-hidden bg-secondary border border-white/10"
-                  >
-                    {entry.novel.coverUrl && (
-                      <img
-                        src={entry.novel.coverUrl}
-                        alt={entry.novel.title}
-                        className="h-full w-full object-cover"
-                      />
-                    )}
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={getNovelHref(entry.novel)}
-                      className="font-medium text-sm text-foreground hover:text-primary truncate block"
-                    >
-                      {entry.novel.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {entry.novel.writers.join(", ")}
-                      {entry.novel.year ? ` · ${entry.novel.year}` : ""}
-                    </p>
-                  </div>
-
-                  {entry.novel.issues && (
-                    <span className="hidden sm:inline-block font-mono text-xs text-muted-foreground">
-                      {entry.issuesRead}/{entry.novel.issues} iss.
-                    </span>
-                  )}
-
-                  {meta && (
-                    <span
-                      className={`hidden md:inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${meta.badgeClass}`}
-                    >
-                      {meta.label}
-                    </span>
-                  )}
-
-                  <div className="w-24 flex justify-end">
-                    {entry.rating > 0 ? (
-                      <StarRating value={entry.rating} readonly size="xs" />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
 
-      {/* Favorite Slot Picker Modal */}
+      {/* Favorite Picker Modal */}
       {pickingSlot !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setPickingSlot(null);
           }}
         >
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card p-5 space-y-4 max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">
-                Choose Favorite #{pickingSlot + 1}
+          <div className="w-full max-w-lg border border-[#333333] bg-[#181818] p-4 space-y-3 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#2C2C2C] pb-2">
+              <h3 className="font-bold text-xs text-white">
+                Select Favorite #{pickingSlot + 1}
               </h3>
               <button
                 type="button"
                 onClick={() => setPickingSlot(null)}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-[#9B9B9B] hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 overflow-y-auto pr-1">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 overflow-y-auto pr-1">
               {favoriteChoices.map((novel) => (
                 <button
                   key={novel.id}
@@ -468,7 +542,7 @@ export default function ShelfPage() {
                   }}
                   className="text-left group space-y-1"
                 >
-                  <div className="aspect-[2/3] rounded-lg overflow-hidden bg-secondary border border-white/10 group-hover:border-primary">
+                  <div className="aspect-[2/3] overflow-hidden border border-[#333333] bg-[#222222] group-hover:border-[#4C74D6]">
                     {novel.coverUrl && (
                       <img
                         src={novel.coverUrl}
@@ -477,7 +551,7 @@ export default function ShelfPage() {
                       />
                     )}
                   </div>
-                  <p className="text-[11px] truncate text-muted-foreground group-hover:text-foreground">
+                  <p className="text-[11px] truncate text-[#CCCCCC] group-hover:text-white">
                     {novel.title}
                   </p>
                 </button>

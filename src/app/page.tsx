@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
-  BookOpen,
   Globe,
+  LayoutGrid,
+  List as ListIcon,
   Search,
-  SlidersHorizontal,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NovelCard } from "@/components/NovelCard";
+import { NovelCard, getNovelHref } from "@/components/NovelCard";
 import { LogModal } from "@/components/LogModal";
 import {
   ALL_GENRES,
@@ -22,12 +23,13 @@ import {
   EDITORIAL_COLLECTIONS,
   getCuratedNovelById,
 } from "@/lib/catalog";
-import { searchOpenLibrary } from "@/lib/openlibrary";
+import { cacheNovelSnapshot, searchOpenLibrary } from "@/lib/openlibrary";
+import { STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
-import type { GraphicNovel, NovelFormat } from "@/lib/types";
+import type { GraphicNovel, NovelFormat, ReadingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type SortOption = "featured" | "rating" | "newest" | "oldest" | "title";
+type SortOption = "ranked" | "popularity" | "newest" | "title";
 const FORMAT_FILTERS: ("All" | NovelFormat)[] = [
   "All",
   "Graphic Novel",
@@ -36,13 +38,19 @@ const FORMAT_FILTERS: ("All" | NovelFormat)[] = [
   "Omnibus",
 ];
 
-export default function HomePage() {
-  const { state, mounted, loadStarterShelf } = useGNovel();
+function HomePageClient() {
+  const searchParams = useSearchParams();
+  const urlQuery = searchParams.get("q") || "";
 
-  const [query, setQuery] = useState("");
+  const { state, mounted, getEntry, setStatus, loadStarterShelf } = useGNovel();
+
+  const [queryOverride, setQueryOverride] = useState<string | null>(null);
+  const query = queryOverride !== null ? queryOverride : urlQuery;
+
   const [selectedGenre, setSelectedGenre] = useState<string>("All");
   const [selectedFormat, setSelectedFormat] = useState<"All" | NovelFormat>("All");
-  const [sortBy, setSortBy] = useState<SortOption>("featured");
+  const [sortBy, setSortBy] = useState<SortOption>("ranked");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const [remoteResults, setRemoteResults] = useState<GraphicNovel[]>([]);
   const [searchingRemote, setSearchingRemote] = useState(false);
@@ -52,7 +60,7 @@ export default function HomePage() {
   const [logNovel, setLogNovel] = useState<GraphicNovel | null>(null);
 
   const handleQueryChange = (next: string) => {
-    setQuery(next);
+    setQueryOverride(next);
     if (next.trim().length < 2) {
       setRemoteResults([]);
       setSearchingRemote(false);
@@ -60,12 +68,9 @@ export default function HomePage() {
     }
   };
 
-  // Live Open Library search when user types >= 2 chars
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      return;
-    }
+    if (trimmed.length < 2) return;
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
@@ -92,12 +97,8 @@ export default function HomePage() {
   const localMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = CURATED_NOVELS.filter((novel) => {
-      if (selectedGenre !== "All" && !novel.genres.includes(selectedGenre)) {
-        return false;
-      }
-      if (selectedFormat !== "All" && novel.format !== selectedFormat) {
-        return false;
-      }
+      if (selectedGenre !== "All" && !novel.genres.includes(selectedGenre)) return false;
+      if (selectedFormat !== "All" && novel.format !== selectedFormat) return false;
       if (!q) return true;
       return (
         novel.title.toLowerCase().includes(q) ||
@@ -109,12 +110,12 @@ export default function HomePage() {
     });
 
     const copy = [...filtered];
-    if (sortBy === "rating") {
+    if (sortBy === "ranked") {
       copy.sort((a, b) => b.communityScore - a.communityScore);
+    } else if (sortBy === "popularity") {
+      copy.sort((a, b) => (b.membersCount || 0) - (a.membersCount || 0));
     } else if (sortBy === "newest") {
       copy.sort((a, b) => b.year - a.year);
-    } else if (sortBy === "oldest") {
-      copy.sort((a, b) => a.year - b.year);
     } else if (sortBy === "title") {
       copy.sort((a, b) => a.title.localeCompare(b.title));
     }
@@ -134,222 +135,328 @@ export default function HomePage() {
   const trackedCount = mounted ? Object.keys(state.library).length : 0;
 
   return (
-    <div className="pb-12">
-      {/* Editorial Hero */}
-      <section className="relative overflow-hidden border-b border-white/10 bg-gradient-to-b from-[#1A2029] via-[#14181E] to-background bg-grid-subtle">
-        <div className="container mx-auto max-w-screen-2xl px-4 py-12 md:py-16">
-          <div className="max-w-3xl space-y-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <BookOpen className="h-3.5 w-3.5" />
-              <span>Your Letterboxd &amp; Backloggd for Graphic Novels</span>
-            </div>
+    <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
+      {/* MAL Title Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
+        <div>
+          <h1 className="text-base sm:text-lg font-bold text-white">
+            {query ? `Search Results for "${query}"` : "Top Graphic Novels & Comics"}
+          </h1>
+        </div>
 
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl leading-[1.05] tracking-tight text-foreground">
-              Track every panel.{" "}
-              <span className="text-primary">Remember every world.</span>
-            </h1>
+        <div className="flex items-center gap-3 text-xs">
+          {mounted && trackedCount === 0 ? (
+            <button
+              type="button"
+              onClick={loadStarterShelf}
+              className="inline-flex items-center gap-1 text-[#4ADE80] hover:underline font-medium"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Load Sample Shelf
+            </button>
+          ) : mounted && trackedCount > 0 ? (
+            <Link href="/shelf/" className="mal-link">
+              My Shelf ({trackedCount})
+            </Link>
+          ) : null}
+        </div>
+      </div>
 
-            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl leading-relaxed">
-              Rate comics, trades, omnibuses, and manga with half-stars. Keep a reading
-              diary, track issue progress, and curate shelves—stored right in your
-              browser.
-            </p>
+      {/* Filter & Search Toolbar */}
+      <div className="border-b border-[#2A2A2A] bg-[#161616] p-3 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <div className="relative flex-1 max-w-md">
+            <Search className="h-3.5 w-3.5 text-[#9B9B9B] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="Filter catalog or search Open Library..."
+              className="h-8 pl-8 pr-8 rounded-[2px] border-[#333333] bg-[#101010] text-xs"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => handleQueryChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9B9B9B] hover:text-white"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
-            {/* Unified Search Bar */}
-            <div className="pt-2 space-y-2.5">
-              <div className="relative max-w-2xl">
-                <Search className="h-4 w-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <Input
-                  type="search"
-                  value={query}
-                  onChange={(e) => handleQueryChange(e.target.value)}
-                  placeholder="Search Watchmen, Alan Moore, Akira, Saga, or any title..."
-                  className="h-12 pl-11 pr-24 rounded-xl bg-card/90 border-white/15 text-base shadow-lg focus-visible:ring-primary"
-                />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => handleQueryChange("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <select
+              value={selectedFormat}
+              onChange={(e) => setSelectedFormat(e.target.value as "All" | NovelFormat)}
+              aria-label="Filter format"
+              className="h-8 rounded-[2px] border border-[#333333] bg-[#101010] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+            >
+              {FORMAT_FILTERS.map((f) => (
+                <option key={f} value={f}>
+                  Format: {f}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              aria-label="Sort catalog"
+              className="h-8 rounded-[2px] border border-[#333333] bg-[#101010] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+            >
+              <option value="ranked">Sort: Top Ranked</option>
+              <option value="popularity">Sort: Most Popular</option>
+              <option value="newest">Sort: Newest</option>
+              <option value="title">Sort: Title A–Z</option>
+            </select>
+
+            <div className="inline-flex border border-[#333333] bg-[#101010] p-0.5 rounded-[2px]">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={cn(
+                  "px-2 py-1 text-xs inline-flex items-center gap-1 rounded-[1px]",
+                  viewMode === "table"
+                    ? "bg-[#2E51A2] text-white font-semibold"
+                    : "text-[#9B9B9B] hover:text-white"
                 )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                {mounted && trackedCount === 0 ? (
-                  <button
-                    type="button"
-                    onClick={loadStarterShelf}
-                    className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Preview with a sample shelf &amp; diary
-                  </button>
-                ) : mounted && trackedCount > 0 ? (
-                  <Link
-                    href="/shelf/"
-                    className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-medium"
-                  >
-                    <span>You have {trackedCount} novels on your shelf</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-
-                {query.trim().length >= 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setComicsOnlySearch(!comicsOnlySearch)}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/60 px-2.5 py-0.5 hover:text-foreground transition-colors"
-                  >
-                    <Globe className="h-3 w-3 text-sky-400" />
-                    Open Library filter: {comicsOnlySearch ? "Comics & Manga" : "All Books"}
-                  </button>
+              >
+                <ListIcon className="h-3.5 w-3.5" />
+                Ranked
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "px-2 py-1 text-xs inline-flex items-center gap-1 rounded-[1px]",
+                  viewMode === "grid"
+                    ? "bg-[#2E51A2] text-white font-semibold"
+                    : "text-[#9B9B9B] hover:text-white"
                 )}
-              </div>
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Covers
+              </button>
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Filters & Catalog */}
-      <section className="container mx-auto max-w-screen-2xl px-4 pt-8 space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
-          {/* Genre Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            {["All", ...ALL_GENRES].map((genre) => (
-              <button
-                key={genre}
-                type="button"
-                onClick={() => setSelectedGenre(genre)}
-                className={cn(
-                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors border",
-                  selectedGenre === genre
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-secondary/50 text-muted-foreground border-white/5 hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                {genre}
-              </button>
+        {/* Genre Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[11px]">
+          {["All", ...ALL_GENRES].map((genre) => (
+            <button
+              key={genre}
+              type="button"
+              onClick={() => setSelectedGenre(genre)}
+              className={cn(
+                "shrink-0 px-2.5 py-1 rounded-[2px] border transition-colors",
+                selectedGenre === genre
+                  ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
+                  : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
+              )}
+            >
+              {genre}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Catalog List */}
+      <div className="p-3 sm:p-4 space-y-6">
+        {localMatches.length === 0 ? (
+          <div className="border border-[#2C2C2C] bg-[#161616] p-8 text-center text-xs text-[#9B9B9B] space-y-2">
+            <p>No curated titles matched those filters.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedGenre("All");
+                setSelectedFormat("All");
+              }}
+              className="mal-link"
+            >
+              Reset filters
+            </button>
+          </div>
+        ) : viewMode === "table" ? (
+          <div className="overflow-x-auto border border-[#2C2C2C]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#2E51A2] text-white text-[11px] font-bold">
+                  <th className="py-2 px-3 w-14 text-center">Rank</th>
+                  <th className="py-2 px-3">Title</th>
+                  <th className="py-2 px-3 w-24 text-center">Score</th>
+                  <th className="py-2 px-3 w-24 text-center hidden sm:table-cell">
+                    Your Score
+                  </th>
+                  <th className="py-2 px-3 w-36 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#252525] bg-[#141414]">
+                {localMatches.map((novel, idx) => {
+                  const entry = getEntry(novel.id);
+                  const statusMeta = entry?.status ? getStatusMeta(entry.status) : undefined;
+                  const href = getNovelHref(novel);
+
+                  return (
+                    <tr
+                      key={novel.id}
+                      className="hover:bg-[#1B1B1B] transition-colors"
+                    >
+                      <td className="py-2.5 px-3 text-center font-mono text-base font-bold text-[#9B9B9B]">
+                        {novel.ranked || idx + 1}
+                      </td>
+
+                      <td className="py-2.5 px-3">
+                        <div className="flex gap-3">
+                          <Link
+                            href={href}
+                            onClick={() => cacheNovelSnapshot(novel)}
+                            className="w-12 h-17 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden"
+                          >
+                            {novel.coverUrl && (
+                              <img
+                                src={novel.coverUrl}
+                                alt={novel.title}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                            )}
+                          </Link>
+                          <div className="min-w-0 space-y-0.5">
+                            <Link
+                              href={href}
+                              onClick={() => cacheNovelSnapshot(novel)}
+                              className="font-bold text-sm mal-link block"
+                            >
+                              {novel.title}
+                            </Link>
+                            <p className="text-[11px] text-[#9B9B9B]">
+                              {novel.format}
+                              {novel.issues ? ` (${novel.issues} issues)` : ""} ·{" "}
+                              {novel.writers.join(", ")}
+                            </p>
+                            <p className="text-[11px] text-[#7F7F7F]">
+                              {novel.publisher} · {novel.year} ·{" "}
+                              {(novel.membersCount || 0).toLocaleString()} members
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="inline-flex items-center gap-1 font-mono text-sm font-bold text-[#FACC15]">
+                          <Star className="h-3.5 w-3.5 fill-[#FACC15] text-[#FACC15]" />
+                          {novel.communityScore.toFixed(2)}
+                        </span>
+                      </td>
+
+                      <td className="py-2.5 px-3 text-center hidden sm:table-cell font-mono">
+                        {entry?.rating ? (
+                          <span className="text-[#8EB4FF] font-bold">{entry.rating}</span>
+                        ) : (
+                          <span className="text-[#666666]">N/A</span>
+                        )}
+                      </td>
+
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex flex-col items-center gap-1">
+                          <select
+                            value={entry?.status || "none"}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "none") {
+                                if (entry?.status && entry.status !== "none") {
+                                  setStatus(novel, entry.status);
+                                }
+                              } else {
+                                const target = val as Exclude<ReadingStatus, "none">;
+                                if (entry?.status !== target) setStatus(novel, target);
+                              }
+                            }}
+                            aria-label={`Set status for ${novel.title}`}
+                            className={cn(
+                              "h-7 w-28 rounded-[2px] border px-1.5 text-[11px] font-semibold focus:outline-none",
+                              statusMeta
+                                ? statusMeta.badgeClass
+                                : "border-[#3A3A3A] bg-[#222222] text-[#E5E5E5]"
+                            )}
+                          >
+                            <option value="none" className="bg-[#181818] text-white">
+                              + Add to List
+                            </option>
+                            {STATUS_OPTIONS.map((opt) => (
+                              <option
+                                key={opt.value}
+                                value={opt.value}
+                                className="bg-[#181818] text-white"
+                              >
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setLogNovel(novel)}
+                            className="text-[10px] mal-link"
+                          >
+                            Log / Review
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
+            {localMatches.map((novel) => (
+              <NovelCard
+                key={novel.id}
+                novel={novel}
+                rank={novel.ranked}
+                onLogClick={(n) => setLogNovel(n)}
+              />
             ))}
           </div>
+        )}
 
-          {/* Format + Sort */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <div className="inline-flex items-center rounded-lg border border-white/10 bg-secondary/40 p-0.5">
-              {FORMAT_FILTERS.map((fmt) => (
-                <button
-                  key={fmt}
-                  type="button"
-                  onClick={() => setSelectedFormat(fmt)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                    selectedFormat === fmt
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {fmt}
-                </button>
-              ))}
-            </div>
-
-            <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-secondary/40 px-2.5 py-1">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                aria-label="Sort catalog"
-                className="bg-transparent text-xs font-medium text-foreground focus:outline-none"
-              >
-                <option value="featured" className="bg-card">Featured</option>
-                <option value="rating" className="bg-card">Highest Rated</option>
-                <option value="newest" className="bg-card">Newest First</option>
-                <option value="oldest" className="bg-card">Oldest First</option>
-                <option value="title" className="bg-card">Title A–Z</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Curated Grid */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">
-              {query ? `Curated Matches (${localMatches.length})` : "Curated Canon"}
-            </h2>
-            <span className="text-xs text-muted-foreground font-mono">
-              {localMatches.length} {localMatches.length === 1 ? "title" : "titles"}
-            </span>
-          </div>
-
-          {localMatches.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
-              {localMatches.map((novel) => (
-                <NovelCard
-                  key={novel.id}
-                  novel={novel}
-                  onLogClick={(n) => setLogNovel(n)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-white/10 bg-card/50 p-8 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                No curated titles matched those filters.
-              </p>
-              {(selectedGenre !== "All" || selectedFormat !== "All") && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSelectedGenre("All");
-                    setSelectedFormat("All");
-                  }}
-                >
-                  Reset filters
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Live Open Library Results (when searching) */}
+        {/* Live Open Library Results */}
         {query.trim().length >= 2 && (
-          <div className="space-y-4 pt-6 border-t border-white/10">
-            <div className="flex items-center justify-between">
+          <section className="space-y-3 pt-4 border-t border-[#2A2A2A]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-sky-400" />
-                <h2 className="text-lg font-semibold tracking-tight">
+                <Globe className="h-4 w-4 text-[#8EB4FF]" />
+                <h2 className="text-sm font-bold text-white">
                   Open Library Archive Results
                 </h2>
               </div>
-              {searchingRemote && (
-                <span className="text-xs text-muted-foreground animate-pulse">
-                  Searching Open Library...
-                </span>
-              )}
+
+              <button
+                type="button"
+                onClick={() => setComicsOnlySearch(!comicsOnlySearch)}
+                className="text-[11px] mal-link"
+              >
+                Scope: {comicsOnlySearch ? "Comics & Manga only" : "All Open Library books"}
+              </button>
             </div>
 
             {searchingRemote && deduplicatedRemote.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="space-y-2">
-                    <Skeleton className="aspect-[2/3] w-full rounded-xl" />
-                    <Skeleton className="h-4 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
+                  <Skeleton key={i} className="aspect-[2/3] bg-[#1C1C1C]" />
                 ))}
               </div>
             ) : remoteError ? (
-              <p className="text-sm text-muted-foreground">
-                Could not reach Open Library right now. Curated search still works offline.
+              <p className="text-xs text-[#9B9B9B]">
+                Open Library is unreachable right now. Curated catalog search still works
+                offline.
               </p>
             ) : deduplicatedRemote.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
                 {deduplicatedRemote.map((novel) => (
                   <NovelCard
                     key={novel.id}
@@ -359,35 +466,29 @@ export default function HomePage() {
                 ))}
               </div>
             ) : !searchingRemote ? (
-              <p className="text-sm text-muted-foreground">
-                No extra archive covers found for &ldquo;{query}&rdquo;.
+              <p className="text-xs text-[#9B9B9B]">
+                No additional Open Library covers found for &ldquo;{query}&rdquo;.
               </p>
             ) : null}
-          </div>
+          </section>
         )}
 
-        {/* Editorial Collections Strip (when not searching) */}
+        {/* Editorial Collections Strip */}
         {!query && (
-          <div className="pt-10 border-t border-white/10 space-y-5">
+          <section className="pt-4 border-t border-[#2A2A2A] space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight">
-                  Curated Reading Lists
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Starter shelves grouped by mood, era, and craft.
-                </p>
-              </div>
+              <h2 className="text-sm font-bold text-white">
+                Interest Stacks &amp; Curated Lists
+              </h2>
               <Link
                 href="/lists/"
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-xs mal-link"
               >
-                <span>View all lists</span>
-                <ArrowRight className="h-3.5 w-3.5" />
+                View all lists <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {EDITORIAL_COLLECTIONS.map((col) => {
                 const books = col.novelIds
                   .map((id) => getCuratedNovelById(id))
@@ -397,15 +498,15 @@ export default function HomePage() {
                     key={col.id}
                     href={`/lists/#${col.id}`}
                     className={cn(
-                      "group rounded-2xl border border-white/10 bg-gradient-to-br p-4 transition-all hover:border-primary/40 hover:-translate-y-0.5",
+                      "border border-[#2C2C2C] bg-gradient-to-b p-3 hover:border-[#4C74D6] transition-colors",
                       col.accent
                     )}
                   >
-                    <div className="flex -space-x-4 mb-4 overflow-hidden py-1">
+                    <div className="flex -space-x-3 mb-2.5 overflow-hidden">
                       {books.slice(0, 5).map((b) => (
                         <div
                           key={b.id}
-                          className="h-20 w-14 shrink-0 rounded-md overflow-hidden border border-white/20 shadow-md bg-secondary"
+                          className="h-16 w-11 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden shadow"
                         >
                           <img
                             src={b.coverUrl}
@@ -416,19 +517,17 @@ export default function HomePage() {
                         </div>
                       ))}
                     </div>
-                    <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                      {col.title}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    <h3 className="text-xs font-bold text-[#8EB4FF]">{col.title}</h3>
+                    <p className="mt-0.5 text-[11px] text-[#9B9B9B] line-clamp-2">
                       {col.subtitle}
                     </p>
                   </Link>
                 );
               })}
             </div>
-          </div>
+          </section>
         )}
-      </section>
+      </div>
 
       <LogModal
         open={Boolean(logNovel)}
@@ -436,5 +535,19 @@ export default function HomePage() {
         initialNovel={logNovel}
       />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-6">
+          <Skeleton className="h-96 w-full bg-[#1C1C1C]" />
+        </div>
+      }
+    >
+      <HomePageClient />
+    </Suspense>
   );
 }

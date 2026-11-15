@@ -1,130 +1,84 @@
 "use client";
 
-import { useState } from "react";
 import { Star } from "lucide-react";
+import { MAL_SCORE_LABELS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 interface StarRatingProps {
-  value: number; // 0 to 5 in 0.5 increments
+  value: number; // 0 = unscored, 1..10 MAL scale
   onChange?: (next: number) => void;
-  size?: "xs" | "sm" | "md" | "lg";
   readonly?: boolean;
+  size?: "xs" | "sm" | "md" | "lg";
   showLabel?: boolean;
   className?: string;
 }
 
 const SIZE_MAP = {
   xs: "w-3 h-3",
-  sm: "w-4 h-4",
-  md: "w-5 h-5",
-  lg: "w-6 h-6",
-};
-
-const RATING_LABELS: Record<number, string> = {
-  0.5: "Disaster",
-  1: "Weak",
-  1.5: "Flawed",
-  2: "Mediocre",
-  2.5: "Decent",
-  3: "Good",
-  3.5: "Very Good",
-  4: "Great",
-  4.5: "Superb",
-  5: "Masterpiece",
+  sm: "w-3.5 h-3.5",
+  md: "w-4 h-4",
+  lg: "w-5 h-5",
 };
 
 export function StarRating({
   value,
   onChange,
-  size = "md",
   readonly = false,
+  size = "sm",
   showLabel = false,
   className,
 }: StarRatingProps) {
-  const [hoverValue, setHoverValue] = useState<number | null>(null);
-  const displayValue = hoverValue ?? value;
   const iconSize = SIZE_MAP[size];
 
   if (readonly) {
+    if (!value) {
+      return (
+        <span className={cn("text-xs text-muted-foreground font-mono", className)}>
+          —
+        </span>
+      );
+    }
     return (
-      <div className={cn("inline-flex items-center gap-0.5", className)} aria-label={`Rated ${value} out of 5`}>
-        {[1, 2, 3, 4, 5].map((star) => {
-          const full = displayValue >= star;
-          const half = !full && displayValue >= star - 0.5;
-          return (
-            <span key={star} className="relative inline-flex">
-              <Star className={cn(iconSize, "text-white/15 fill-white/5")} />
-              {(full || half) && (
-                <span
-                  className="absolute inset-0 overflow-hidden"
-                  style={{ width: full ? "100%" : "50%" }}
-                >
-                  <Star className={cn(iconSize, "text-primary fill-primary")} />
-                </span>
-              )}
-            </span>
-          );
-        })}
-        {showLabel && value > 0 && (
-          <span className="ml-1.5 text-xs font-mono text-muted-foreground">
-            {value.toFixed(1)}
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 font-mono text-xs font-semibold text-[#FACC15]",
+          className
+        )}
+      >
+        <Star className={cn(iconSize, "fill-[#FACC15] text-[#FACC15]")} />
+        <span>{value}</span>
+        {showLabel && (
+          <span className="font-sans font-normal text-muted-foreground text-[11px]">
+            / 10
           </span>
         )}
-      </div>
+      </span>
     );
   }
 
   return (
-    <div className={cn("inline-flex items-center gap-2", className)}>
-      <div
-        className="inline-flex items-center gap-1"
-        onMouseLeave={() => setHoverValue(null)}
+    <div className={cn("inline-flex items-center gap-1.5", className)}>
+      <Star
+        className={cn(
+          iconSize,
+          value > 0
+            ? "fill-[#FACC15] text-[#FACC15]"
+            : "text-muted-foreground"
+        )}
+      />
+      <select
+        value={value}
+        onChange={(e) => onChange?.(Number(e.target.value))}
+        aria-label="Your Score"
+        className="h-7 rounded border border-[#3a3a3a] bg-[#1e1e1e] px-2 text-xs text-foreground focus:outline-none focus:border-[#4c74d6]"
       >
-        {[1, 2, 3, 4, 5].map((star) => {
-          const full = displayValue >= star;
-          const half = !full && displayValue >= star - 0.5;
-          return (
-            <div key={star} className="relative inline-flex cursor-pointer select-none">
-              <Star className={cn(iconSize, "text-white/15 fill-white/5 transition-transform")} />
-              {(full || half) && (
-                <span
-                  className="pointer-events-none absolute inset-0 overflow-hidden"
-                  style={{ width: full ? "100%" : "50%" }}
-                >
-                  <Star className={cn(iconSize, "text-primary fill-primary")} />
-                </span>
-              )}
-              <button
-                type="button"
-                aria-label={`Rate ${star - 0.5} stars`}
-                className="absolute inset-y-0 left-0 w-1/2 focus:outline-none"
-                onMouseEnter={() => setHoverValue(star - 0.5)}
-                onClick={() => onChange?.(star - 0.5)}
-              />
-              <button
-                type="button"
-                aria-label={`Rate ${star} stars`}
-                className="absolute inset-y-0 right-0 w-1/2 focus:outline-none"
-                onMouseEnter={() => setHoverValue(star)}
-                onClick={() => onChange?.(star)}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {showLabel && (
-        <span className="text-xs font-medium text-muted-foreground min-w-[80px]">
-          {displayValue > 0 ? (
-            <>
-              <span className="text-primary font-mono font-semibold">{displayValue.toFixed(1)}</span>{" "}
-              · {RATING_LABELS[displayValue] || ""}
-            </>
-          ) : (
-            "Tap to rate"
-          )}
-        </span>
-      )}
+        <option value={0}>Select Score</option>
+        {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
+          <option key={n} value={n}>
+            {MAL_SCORE_LABELS[n]}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

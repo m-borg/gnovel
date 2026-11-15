@@ -4,19 +4,18 @@ import { useState } from "react";
 import {
   BookmarkPlus,
   Check,
+  ExternalLink,
   Heart,
+  Link2,
   ListPlus,
-  Minus,
   NotebookPen,
   Plus,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { StarRating } from "./StarRating";
 import { LogModal } from "./LogModal";
-import { STATUS_OPTIONS } from "@/lib/status";
+import { MAL_SCORE_LABELS, STATUS_OPTIONS } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
-import type { GraphicNovel } from "@/lib/types";
+import type { GraphicNovel, ReadingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ListActionsProps {
@@ -32,6 +31,7 @@ export function ListActions({ novel }: ListActionsProps) {
     setRating,
     toggleLike,
     setProgress,
+    setCustomUrl,
     createList,
     toggleNovelInList,
   } = useGNovel();
@@ -39,10 +39,12 @@ export function ListActions({ novel }: ListActionsProps) {
   const [logOpen, setLogOpen] = useState(false);
   const [listPickerOpen, setListPickerOpen] = useState(false);
   const [newListName, setNewListName] = useState("");
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkDraft, setLinkDraft] = useState("");
 
   if (!mounted) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-card p-4 h-64 animate-pulse" />
+      <div className="border border-[#2C2C2C] bg-[#181818] p-3 h-48 animate-pulse" />
     );
   }
 
@@ -52,8 +54,18 @@ export function ListActions({ novel }: ListActionsProps) {
   const liked = entry?.liked || false;
   const issuesRead = entry?.issuesRead || 0;
   const totalIssues = novel.issues || 0;
-  const progressPct =
-    totalIssues > 0 ? Math.min(100, Math.round((issuesRead / totalIssues) * 100)) : 0;
+  const savedUrl = entry?.customUrl || "";
+
+  const handleStatusSelect = (val: string) => {
+    if (val === "none") {
+      if (currentStatus !== "none") setStatus(novel, currentStatus);
+    } else {
+      const target = val as Exclude<ReadingStatus, "none">;
+      if (currentStatus !== target) {
+        setStatus(novel, target);
+      }
+    }
+  };
 
   const handleCreateQuickList = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,215 +75,236 @@ export function ListActions({ novel }: ListActionsProps) {
     setNewListName("");
   };
 
+  const handleSaveLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomUrl(novel, linkDraft);
+    setEditingLink(false);
+  };
+
   return (
     <>
-      <div className="rounded-2xl border border-white/10 bg-card p-4 space-y-5 shadow-lg">
-        {/* Status Grid */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Shelf Status
-            </span>
-            <button
-              type="button"
-              onClick={() => toggleLike(novel)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors border",
-                liked
-                  ? "bg-rose-500/15 border-rose-500/30 text-rose-400"
-                  : "bg-secondary/50 border-white/10 text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Heart className={cn("h-3.5 w-3.5", liked && "fill-rose-400")} />
-              {liked ? "Liked" : "Like"}
-            </button>
+      <div className="space-y-3 text-xs">
+        {/* MAL "Edit Status" Box */}
+        <div className="border border-[#2E2E2E] bg-[#1A1A1A]">
+          <div className="border-b border-[#2E2E2E] bg-[#222222] px-2.5 py-1.5 font-bold text-[#E5E5E5]">
+            Edit Status
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            {STATUS_OPTIONS.map((opt) => {
-              const active = currentStatus === opt.value;
-              return (
+          <div className="p-2.5 space-y-2.5">
+            {/* Status Row */}
+            <div className="grid grid-cols-[74px_1fr] items-center gap-2">
+              <label className="text-[#9B9B9B]">Status:</label>
+              <select
+                value={currentStatus}
+                onChange={(e) => handleStatusSelect(e.target.value)}
+                className="h-7 w-full rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+              >
+                <option value="none">Not on Shelf</option>
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Issues Read Row */}
+            <div className="grid grid-cols-[74px_1fr] items-center gap-2">
+              <label className="text-[#9B9B9B]">
+                {novel.issues ? "Issues:" : "Chapters:"}
+              </label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  max={totalIssues || undefined}
+                  value={issuesRead}
+                  onChange={(e) =>
+                    setProgress(novel, Math.max(0, parseInt(e.target.value, 10) || 0))
+                  }
+                  className="h-7 w-14 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-1.5 text-center font-mono text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                />
+                <span className="font-mono text-[#9B9B9B]">
+                  / {totalIssues || "?"}
+                </span>
                 <button
-                  key={opt.value}
                   type="button"
-                  onClick={() => setStatus(novel, opt.value)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition-all",
-                    opt.value === "completed" && "col-span-2",
-                    active
-                      ? opt.badgeClass
-                      : "border-white/10 bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
+                  title="Increment +1"
+                  onClick={() =>
+                    setProgress(
+                      novel,
+                      totalIssues ? Math.min(totalIssues, issuesRead + 1) : issuesRead + 1
+                    )
+                  }
+                  className="ml-auto flex h-7 w-7 items-center justify-center rounded-[2px] border border-[#3A3A3A] bg-[#222222] text-white hover:bg-[#2E51A2] transition-colors"
                 >
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full shrink-0",
-                      active ? opt.dotClass : "bg-white/25"
-                    )}
-                  />
-                  <span className="truncate">{opt.label}</span>
-                  {active && <Check className="ml-auto h-3.5 w-3.5 shrink-0" />}
+                  <Plus className="h-3.5 w-3.5" />
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              </div>
+            </div>
 
-        {/* Half-star Rating */}
-        <div className="space-y-2 pt-3 border-t border-white/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Your Rating
-            </span>
-            {currentRating > 0 && (
+            {/* Your Score Row */}
+            <div className="grid grid-cols-[74px_1fr] items-center gap-2">
+              <label className="text-[#9B9B9B]">Your Score:</label>
+              <select
+                value={currentRating}
+                onChange={(e) => setRating(novel, Number(e.target.value))}
+                className="h-7 w-full rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+              >
+                <option value={0}>Select</option>
+                {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
+                  <option key={n} value={n}>
+                    {MAL_SCORE_LABELS[n]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-1.5 pt-1">
               <button
                 type="button"
-                onClick={() => setRating(novel, currentRating)}
-                className="text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={() => setLogOpen(true)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold transition-colors"
               >
-                Clear
+                <NotebookPen className="h-3.5 w-3.5" />
+                Log / Review
               </button>
-            )}
+            </div>
           </div>
-          <StarRating
-            value={currentRating}
-            onChange={(val) => setRating(novel, val)}
-            size="md"
-            showLabel
-          />
         </div>
 
-        {/* Issue / Volume Progress */}
-        <div className="space-y-2 pt-3 border-t border-white/10">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {novel.issues ? "Issues Read" : "Volumes / Chapters"}
-            </span>
-            {totalIssues > 0 && (
-              <span className="text-[11px] font-mono text-muted-foreground">
-                {progressPct}%
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setProgress(novel, Math.max(0, issuesRead - 1))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-secondary/60 text-muted-foreground hover:text-foreground"
-              aria-label="Decrease progress"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <Input
-              type="number"
-              min={0}
-              max={totalIssues || undefined}
-              value={issuesRead}
-              onChange={(e) =>
-                setProgress(novel, Math.max(0, parseInt(e.target.value, 10) || 0))
-              }
-              className="h-8 text-center font-mono bg-secondary/60 border-white/10"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                setProgress(
-                  novel,
-                  totalIssues ? Math.min(totalIssues, issuesRead + 1) : issuesRead + 1
-                )
-              }
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-secondary/60 text-muted-foreground hover:text-foreground"
-              aria-label="Increase progress"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-xs font-mono text-muted-foreground shrink-0">
-              / {totalIssues || "?"}
-            </span>
-          </div>
-
-          {totalIssues > 0 && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full bg-emerald-400 transition-all duration-300"
-                style={{ width: `${progressPct}%` }}
+        {/* MAL Text-Link Actions (Favorites, Lists, Reader Link) */}
+        <div className="border-y border-[#2A2A2A] divide-y divide-[#252525]">
+          <button
+            type="button"
+            onClick={() => toggleLike(novel)}
+            className="flex w-full items-center justify-between py-2 px-1 text-left mal-link"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Heart
+                className={cn(
+                  "h-3.5 w-3.5",
+                  liked ? "fill-[#FB7185] text-[#FB7185]" : "text-[#8EB4FF]"
+                )}
               />
+              {liked ? "Remove from Favorites" : "Add to Favorites"}
+            </span>
+          </button>
+
+          <div>
+            <button
+              type="button"
+              onClick={() => setListPickerOpen(!listPickerOpen)}
+              className="flex w-full items-center justify-between py-2 px-1 text-left mal-link"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <ListPlus className="h-3.5 w-3.5" />
+                Add to Custom List
+              </span>
+              <span className="font-mono text-[11px] text-[#9B9B9B]">
+                (
+                {
+                  state.lists.filter((l) => l.items.some((i) => i.novelId === novel.id))
+                    .length
+                }
+                )
+              </span>
+            </button>
+
+            {listPickerOpen && (
+              <div className="mb-2 rounded border border-[#2E2E2E] bg-[#141414] p-2 space-y-2">
+                {state.lists.length > 0 ? (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {state.lists.map((list) => {
+                      const included = list.items.some((i) => i.novelId === novel.id);
+                      return (
+                        <button
+                          key={list.id}
+                          type="button"
+                          onClick={() => toggleNovelInList(list.id, novel)}
+                          className="flex w-full items-center justify-between rounded px-2 py-1 text-xs hover:bg-[#222222] text-left"
+                        >
+                          <span className="truncate text-[#E5E5E5]">{list.title}</span>
+                          {included ? (
+                            <Check className="h-3.5 w-3.5 text-[#4ADE80] shrink-0" />
+                          ) : (
+                            <BookmarkPlus className="h-3.5 w-3.5 text-[#9B9B9B] shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-[#9B9B9B]">No lists yet.</p>
+                )}
+
+                <form onSubmit={handleCreateQuickList} className="flex gap-1">
+                  <Input
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    placeholder="New list..."
+                    className="h-7 text-xs bg-[#1C1C1C] border-[#333333]"
+                  />
+                  <button
+                    type="submit"
+                    className="px-2 h-7 rounded-[2px] bg-[#2E51A2] text-white text-xs font-semibold shrink-0"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+
+          <div className="py-2 px-1 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 text-[#9B9B9B]">
+                <Link2 className="h-3.5 w-3.5" />
+                Reader / Source Link
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setLinkDraft(savedUrl);
+                  setEditingLink(!editingLink);
+                }}
+                className="mal-link text-[11px]"
+              >
+                {editingLink ? "Cancel" : savedUrl ? "Edit" : "Attach URL"}
+              </button>
             </div>
-          )}
-        </div>
 
-        {/* Diary & List CTAs */}
-        <div className="space-y-2 pt-3 border-t border-white/10">
-          <Button
-            type="button"
-            onClick={() => setLogOpen(true)}
-            className="w-full h-9 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold gap-2"
-          >
-            <NotebookPen className="h-4 w-4" />
-            Log or Review in Diary
-          </Button>
+            {savedUrl && !editingLink && (
+              <a
+                href={savedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] mal-link break-all"
+              >
+                <ExternalLink className="h-3 w-3 shrink-0" />
+                Open attached reader link
+              </a>
+            )}
 
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setListPickerOpen(!listPickerOpen)}
-            className="w-full h-9 justify-between border border-white/10"
-          >
-            <span className="inline-flex items-center gap-2">
-              <ListPlus className="h-4 w-4 text-primary" />
-              Add to Custom List
-            </span>
-            <span className="text-xs font-mono text-muted-foreground">
-              {
-                state.lists.filter((l) => l.items.some((i) => i.novelId === novel.id))
-                  .length
-              }
-            </span>
-          </Button>
-
-          {listPickerOpen && (
-            <div className="rounded-xl border border-white/10 bg-secondary/70 p-2.5 space-y-2">
-              {state.lists.length > 0 ? (
-                <div className="space-y-1 max-h-36 overflow-y-auto">
-                  {state.lists.map((list) => {
-                    const included = list.items.some((i) => i.novelId === novel.id);
-                    return (
-                      <button
-                        key={list.id}
-                        type="button"
-                        onClick={() => toggleNovelInList(list.id, novel)}
-                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs hover:bg-white/10 text-left transition-colors"
-                      >
-                        <span className="truncate">{list.title}</span>
-                        {included ? (
-                          <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                        ) : (
-                          <BookmarkPlus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-[11px] text-muted-foreground px-1">
-                  No lists yet — create one below.
-                </p>
-              )}
-
-              <form onSubmit={handleCreateQuickList} className="flex gap-1.5 pt-1 border-t border-white/10">
+            {editingLink && (
+              <form onSubmit={handleSaveLink} className="flex gap-1 pt-1">
                 <Input
-                  value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                  placeholder="New list name..."
-                  className="h-7 text-xs bg-background/60 border-white/10"
+                  type="url"
+                  value={linkDraft}
+                  onChange={(e) => setLinkDraft(e.target.value)}
+                  placeholder="https://..."
+                  className="h-7 text-xs bg-[#121212] border-[#3A3A3A]"
                 />
-                <Button type="submit" size="xs" className="shrink-0">
-                  Add
-                </Button>
+                <button
+                  type="submit"
+                  className="px-2 h-7 rounded-[2px] bg-[#2E51A2] text-white text-xs font-semibold shrink-0"
+                >
+                  Save
+                </button>
               </form>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

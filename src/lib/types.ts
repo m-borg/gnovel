@@ -14,24 +14,37 @@ export type EditionFormat =
   | "Single Issues"
   | "Digital";
 
+export interface IssueItem {
+  number: number;
+  title: string;
+  date?: string;
+}
+
 export interface GraphicNovel {
   id: string;
   olKey?: string;
   title: string;
   subtitle?: string;
+  altTitles?: string[];
   writers: string[];
   artists: string[];
   publisher: string;
   year: number;
+  publicationStatus?: "Finished" | "Publishing";
   issues?: number;
   pages?: number;
   format: NovelFormat;
   genres: string[];
   deck: string;
   synopsis: string;
+  background?: string;
+  issuesList?: IssueItem[];
   coverUrl: string;
-  communityScore: number; // 0-5 scale
+  communityScore: number; // 0-10 MAL scale (e.g. 9.24)
   ratingsCount: number;
+  membersCount?: number;
+  ranked?: number;
+  popularity?: number;
   isCurated?: boolean;
 }
 
@@ -39,9 +52,10 @@ export interface LibraryEntry {
   novelId: string;
   novel: GraphicNovel;
   status: ReadingStatus;
-  rating: number; // 0 to 5 in 0.5 increments
+  rating: number; // 0 = unscored, 1..10 MAL integer scale
   liked: boolean;
   issuesRead: number;
+  customUrl?: string;
   updatedAt: string;
 }
 
@@ -51,7 +65,7 @@ export interface DiaryEntry {
   novel: GraphicNovel;
   date: string; // YYYY-MM-DD
   status: Exclude<ReadingStatus, "none">;
-  rating: number; // 0 to 5 in 0.5 increments
+  rating: number; // 0 = unscored, 1..10 MAL scale
   edition: EditionFormat;
   reread: boolean;
   review: string;
@@ -84,9 +98,27 @@ export interface EditorialCollection {
 }
 
 export interface UserStoreState {
-  version: 2;
+  version: 3;
   library: Record<string, LibraryEntry>;
   diary: DiaryEntry[];
   lists: CustomList[];
-  favorites: string[]; // up to 4 novelIds
+  favorites: string[];
+}
+
+export interface OpenLibraryEnrichment {
+  average10?: number;
+  ratingsCount?: number;
+  ratingCounts?: Record<string, number>;
+  members?: number;
+  wantToRead?: number;
+  currentlyReading?: number;
+  alreadyRead?: number;
+  editions: {
+    key: string;
+    title: string;
+    publishers: string[];
+    publishDate?: string;
+    pages?: number;
+    format?: string;
+  }[];
 }

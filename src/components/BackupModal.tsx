@@ -49,7 +49,7 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Library backup and data settings"
@@ -57,49 +57,49 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <h2 className="font-semibold text-base">Local Archive & Backup</h2>
+      <div className="w-full max-w-md border border-[#333333] bg-[#181818] shadow-2xl overflow-hidden text-xs">
+        <div className="flex items-center justify-between border-b border-[#2C2C2C] bg-[#222222] px-4 py-3">
+          <h2 className="font-bold text-sm text-white">Local Archive &amp; Backup</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+            className="p-1 text-[#9B9B9B] hover:text-white"
             aria-label="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            GNovel runs 100% client-side with zero accounts or tracking. Your shelf,
-            half-star ratings, diary reviews, and lists live in your browser&apos;s{" "}
-            <code className="text-foreground font-mono">localStorage</code>. Export a
-            JSON snapshot anytime to move devices or keep a backup.
+        <div className="p-4 space-y-4">
+          <p className="text-xs text-[#9B9B9B] leading-relaxed">
+            GNovel runs 100% client-side with zero accounts. Your shelf, 1–10 scores,
+            diary reviews, and custom reader links are saved in{" "}
+            <code className="text-white font-mono">localStorage</code>. Export a JSON
+            snapshot anytime.
           </p>
 
-          <div className="grid grid-cols-3 gap-2 rounded-xl bg-secondary/50 border border-white/5 p-3 text-center">
+          <div className="grid grid-cols-3 gap-2 border border-[#2A2A2A] bg-[#121212] p-2.5 text-center">
             <div>
-              <div className="text-lg font-bold font-mono text-foreground">{totalBooks}</div>
-              <div className="text-[11px] text-muted-foreground">Tracked</div>
+              <div className="text-base font-bold font-mono text-white">{totalBooks}</div>
+              <div className="text-[10px] text-[#9B9B9B]">Tracked</div>
             </div>
             <div>
-              <div className="text-lg font-bold font-mono text-foreground">{totalLogs}</div>
-              <div className="text-[11px] text-muted-foreground">Diary Logs</div>
+              <div className="text-base font-bold font-mono text-white">{totalLogs}</div>
+              <div className="text-[10px] text-[#9B9B9B]">Diary Logs</div>
             </div>
             <div>
-              <div className="text-lg font-bold font-mono text-foreground">{totalLists}</div>
-              <div className="text-[11px] text-muted-foreground">Lists</div>
+              <div className="text-base font-bold font-mono text-white">{totalLists}</div>
+              <div className="text-[10px] text-[#9B9B9B]">Lists</div>
             </div>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <Button
               type="button"
               onClick={handleDownload}
-              className="w-full justify-start gap-2.5 h-10 bg-secondary hover:bg-secondary/80 text-foreground border border-white/10"
+              className="w-full justify-start gap-2 h-8 bg-[#222222] hover:bg-[#2A2A2A] text-white border border-[#333333] text-xs"
             >
-              <Download className="w-4 h-4 text-primary" />
+              <Download className="h-3.5 w-3.5 text-[#8EB4FF]" />
               Export Backup (.json)
             </Button>
 
@@ -113,9 +113,9 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
             <Button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full justify-start gap-2.5 h-10 bg-secondary hover:bg-secondary/80 text-foreground border border-white/10"
+              className="w-full justify-start gap-2 h-8 bg-[#222222] hover:bg-[#2A2A2A] text-white border border-[#333333] text-xs"
             >
-              <Upload className="w-4 h-4 text-sky-400" />
+              <Upload className="h-3.5 w-3.5 text-[#8EB4FF]" />
               Import Backup (.json)
             </Button>
 
@@ -125,19 +125,19 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
                 loadStarterShelf();
                 setFeedback({ type: "ok", msg: "Sample shelf, diary & list loaded!" });
               }}
-              className="w-full justify-start gap-2.5 h-10 bg-secondary hover:bg-secondary/80 text-foreground border border-white/10"
+              className="w-full justify-start gap-2 h-8 bg-[#222222] hover:bg-[#2A2A2A] text-white border border-[#333333] text-xs"
             >
-              <Sparkles className="w-4 h-4 text-emerald-400" />
-              Load Sample Shelf & Diary
+              <Sparkles className="h-3.5 w-3.5 text-[#4ADE80]" />
+              Load Sample Shelf &amp; Diary
             </Button>
           </div>
 
           {feedback && (
             <div
-              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
+              className={`flex items-center gap-2 px-2.5 py-2 text-xs border ${
                 feedback.type === "ok"
-                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20"
-                  : "bg-destructive/15 text-red-300 border border-destructive/20"
+                  ? "bg-[#2DB039]/15 text-[#4ADE80] border-[#2DB039]/30"
+                  : "bg-[#A12F31]/20 text-[#F87171] border-[#A12F31]/40"
               }`}
             >
               <Check className="w-3.5 h-3.5 shrink-0" />
@@ -145,19 +145,19 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
             </div>
           )}
 
-          <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+          <div className="pt-3 border-t border-[#2A2A2A] flex items-center justify-between">
             {!confirmClear ? (
               <button
                 type="button"
                 onClick={() => setConfirmClear(true)}
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-rose-400 transition-colors"
+                className="inline-flex items-center gap-1 text-[11px] text-[#9B9B9B] hover:text-[#FB7185]"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3 h-3" />
                 Reset local data
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-rose-400">Erase all logs?</span>
+                <span className="text-[11px] text-[#FB7185]">Erase all?</span>
                 <Button
                   type="button"
                   size="xs"
@@ -181,7 +181,7 @@ export function BackupModal({ open, onClose }: BackupModalProps) {
               </div>
             )}
 
-            <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+            <Button type="button" size="xs" variant="ghost" onClick={onClose}>
               Done
             </Button>
           </div>

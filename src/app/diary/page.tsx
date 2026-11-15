@@ -50,190 +50,180 @@ export default function DiaryPage() {
 
   if (!mounted) {
     return (
-      <div className="container mx-auto max-w-screen-lg px-4 py-12">
-        <div className="h-48 rounded-2xl bg-card animate-pulse" />
+      <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-6">
+        <div className="h-48 bg-[#1C1C1C] animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-screen-lg px-4 py-8 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <h1 className="font-serif text-4xl tracking-tight">Reading Diary</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            A chronological log of every issue run, trade, omnibus, and re-read.
-          </p>
-        </div>
-
-        <Button
+    <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
+        <h1 className="text-base sm:text-lg font-bold text-white">
+          Reading Diary &amp; Reviews
+        </h1>
+        <button
           type="button"
           onClick={() => setLogOpen(true)}
-          className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold gap-2 self-start sm:self-auto"
+          className="inline-flex items-center gap-1 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           Log a Read
-        </Button>
+        </button>
       </div>
 
-      {grouped.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-card/40 p-12 text-center space-y-4">
-          <CalendarDays className="h-10 w-10 text-primary/80 mx-auto" />
-          <div className="space-y-1">
-            <h2 className="font-serif text-2xl">No diary entries yet</h2>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Log what you finished today, record which edition you read, and jot down
-              reviews or favorite moments.
+      <div className="p-3 sm:p-4">
+        {grouped.length === 0 ? (
+          <div className="border border-[#2C2C2C] bg-[#161616] p-10 text-center space-y-3">
+            <CalendarDays className="h-8 w-8 text-[#8EB4FF] mx-auto" />
+            <h2 className="text-base font-bold text-white">No Diary Entries Yet</h2>
+            <p className="text-xs text-[#9B9B9B] max-w-md mx-auto">
+              Log what you finished, track edition format, and record spoiler-tagged
+              reviews.
             </p>
+            <div className="flex flex-wrap justify-center gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setLogOpen(true)}
+                className="bg-[#2E51A2] hover:bg-[#3A62BE] text-white gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Log First Entry
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={loadStarterShelf}
+                className="gap-1.5"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#4ADE80]" />
+                Load Sample Diary
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Button type="button" onClick={() => setLogOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Log First Entry
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={loadStarterShelf}
-              className="gap-2 border border-white/10"
-            >
-              <Sparkles className="h-4 w-4 text-emerald-400" />
-              Load Sample Diary
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-10">
-          {grouped.map((group) => (
-            <section key={group.month} className="space-y-4">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.month}
-                </h2>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {group.entries.length}{" "}
-                  {group.entries.length === 1 ? "entry" : "entries"}
-                </span>
-              </div>
+        ) : (
+          <div className="space-y-6">
+            {grouped.map((group) => (
+              <section key={group.month} className="space-y-2.5">
+                <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+                    {group.month}
+                  </h2>
+                  <span className="font-mono text-[11px] text-[#9B9B9B]">
+                    {group.entries.length}{" "}
+                    {group.entries.length === 1 ? "entry" : "entries"}
+                  </span>
+                </div>
 
-              <div className="space-y-3">
-                {group.entries.map((entry) => {
-                  const dayNum = entry.date.split("-")[2] || "—";
-                  const meta = getStatusMeta(entry.status);
-                  const hidden = entry.spoiler && !revealedSpoilers[entry.id];
-                  const href = getNovelHref(entry.novel);
+                <div className="divide-y divide-[#252525] border border-[#2C2C2C] bg-[#161616]">
+                  {group.entries.map((entry) => {
+                    const dayNum = entry.date.split("-")[2] || "—";
+                    const meta = getStatusMeta(entry.status);
+                    const hidden = entry.spoiler && !revealedSpoilers[entry.id];
+                    const href = getNovelHref(entry.novel);
 
-                  return (
-                    <article
-                      key={entry.id}
-                      className="flex gap-4 rounded-2xl border border-white/10 bg-card p-4 transition-colors hover:border-white/20"
-                    >
-                      {/* Calendar Day Badge */}
-                      <div className="hidden sm:flex flex-col items-center justify-center w-12 h-14 shrink-0 rounded-xl bg-secondary/60 border border-white/5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Day
-                        </span>
-                        <span className="font-mono text-lg font-bold text-foreground">
-                          {dayNum}
-                        </span>
-                      </div>
-
-                      {/* Cover Thumbnail */}
-                      <Link
-                        href={href}
-                        className="w-16 h-24 shrink-0 rounded-lg overflow-hidden bg-secondary border border-white/10"
-                      >
-                        {entry.novel.coverUrl && (
-                          <img
-                            src={entry.novel.coverUrl}
-                            alt={entry.novel.title}
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </Link>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <Link
-                              href={href}
-                              className="font-serif text-xl leading-tight text-foreground hover:text-primary transition-colors block truncate"
-                            >
-                              {entry.novel.title}
-                            </Link>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {entry.novel.writers.join(", ")}
-                              {entry.novel.year ? ` · ${entry.novel.year}` : ""}
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => deleteDiaryLog(entry.id)}
-                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-white/5 hover:text-rose-400 transition-colors shrink-0"
-                            aria-label="Delete diary entry"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                    return (
+                      <article key={entry.id} className="flex gap-3 p-3 text-xs">
+                        <div className="hidden sm:flex flex-col items-center justify-center w-11 h-14 shrink-0 border border-[#2E2E2E] bg-[#121212]">
+                          <span className="text-[9px] uppercase text-[#9B9B9B]">Day</span>
+                          <span className="font-mono text-base font-bold text-white">
+                            {dayNum}
+                          </span>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <span className="sm:hidden font-mono text-muted-foreground">
-                            {entry.date}
-                          </span>
-                          {entry.rating > 0 && (
-                            <StarRating value={entry.rating} readonly size="xs" showLabel />
+                        <Link
+                          href={href}
+                          className="w-12 h-17 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden"
+                        >
+                          {entry.novel.coverUrl && (
+                            <img
+                              src={entry.novel.coverUrl}
+                              alt={entry.novel.title}
+                              className="h-full w-full object-cover"
+                            />
                           )}
-                          {meta && (
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
-                            >
-                              {meta.label}
-                            </span>
-                          )}
-                          <span className="inline-flex items-center gap-1 rounded-full bg-secondary/70 border border-white/5 px-2 py-0.5 text-[11px] text-muted-foreground">
-                            <Layers className="h-3 w-3" />
-                            {entry.edition}
-                          </span>
-                          {entry.reread && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-[11px] text-sky-300">
-                              <RotateCcw className="h-3 w-3" />
-                              Re-read
-                            </span>
-                          )}
-                        </div>
+                        </Link>
 
-                        {entry.review && (
-                          hidden ? (
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <Link
+                                href={href}
+                                className="font-bold text-sm mal-link block truncate"
+                              >
+                                {entry.novel.title}
+                              </Link>
+                              <p className="text-[11px] text-[#9B9B9B] truncate">
+                                {entry.novel.writers.join(", ")}
+                                {entry.novel.year ? ` · ${entry.novel.year}` : ""}
+                              </p>
+                            </div>
                             <button
                               type="button"
-                              onClick={() =>
-                                setRevealedSpoilers((prev) => ({
-                                  ...prev,
-                                  [entry.id]: true,
-                                }))
-                              }
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-500/20"
+                              onClick={() => deleteDiaryLog(entry.id)}
+                              className="p-1 text-[#9B9B9B] hover:text-[#FB7185] shrink-0"
+                              aria-label="Delete diary entry"
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              Contains spoilers — click to reveal
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
-                          ) : (
-                            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line pt-1">
-                              {entry.review}
-                            </p>
-                          )
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="sm:hidden font-mono text-[#9B9B9B]">
+                              {entry.date}
+                            </span>
+                            <StarRating value={entry.rating} readonly size="xs" showLabel />
+                            {meta && (
+                              <span
+                                className={`border px-1.5 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
+                              >
+                                {meta.label}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 text-[#9B9B9B]">
+                              <Layers className="h-3 w-3" />
+                              {entry.edition}
+                            </span>
+                            {entry.reread && (
+                              <span className="inline-flex items-center gap-1 text-[#8EB4FF]">
+                                <RotateCcw className="h-3 w-3" />
+                                Re-read
+                              </span>
+                            )}
+                          </div>
+
+                          {entry.review &&
+                            (hidden ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setRevealedSpoilers((prev) => ({
+                                    ...prev,
+                                    [entry.id]: true,
+                                  }))
+                                }
+                                className="inline-flex items-center gap-1 border border-[#E7B715]/40 bg-[#E7B715]/10 px-2.5 py-1 text-[11px] text-[#FACC15]"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Contains spoilers — click to reveal
+                              </button>
+                            ) : (
+                              <p className="text-xs text-[#E5E5E5] leading-relaxed whitespace-pre-line pt-0.5">
+                                {entry.review}
+                              </p>
+                            ))}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
 
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} />
     </div>

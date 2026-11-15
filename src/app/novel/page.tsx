@@ -4,37 +4,56 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
-  Calendar,
+  BookOpen,
+  Check,
   ExternalLink,
   Eye,
-  Heart,
-  Layers,
+  NotebookPen,
   RotateCcw,
   Star,
   Trash2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ListActions } from "@/components/ListActions";
-import { NovelCard } from "@/components/NovelCard";
+import { NovelCard, getNovelHref } from "@/components/NovelCard";
 import { StarRating } from "@/components/StarRating";
+import { LogModal } from "@/components/LogModal";
 import { CURATED_NOVELS, getCuratedNovelById } from "@/lib/catalog";
-import { fetchOpenLibraryWork, getCachedNovel } from "@/lib/openlibrary";
-import { getStatusMeta } from "@/lib/status";
+import {
+  fetchOpenLibraryEnrichment,
+  fetchOpenLibraryWork,
+  getCachedNovel,
+} from "@/lib/openlibrary";
+import { MAL_SCORE_LABELS, STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
-import type { GraphicNovel } from "@/lib/types";
+import type {
+  GraphicNovel,
+  OpenLibraryEnrichment,
+  ReadingStatus,
+} from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+type DetailTab = "details" | "issues" | "editions" | "reviews" | "recs";
 
 function NovelDetailClient() {
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
   const olParam = searchParams.get("ol");
 
-  const { state, deleteDiaryLog } = useGNovel();
+  const {
+    state,
+    getEntry,
+    setStatus,
+    setRating,
+    setProgress,
+    deleteDiaryLog,
+  } = useGNovel();
 
   const [novel, setNovel] = useState<GraphicNovel | null>(null);
+  const [enrichment, setEnrichment] = useState<OpenLibraryEnrichment | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<DetailTab>("details");
+  const [logOpen, setLogOpen] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -42,52 +61,42 @@ function NovelDetailClient() {
 
     async function load() {
       setLoading(true);
+      setEnrichment(null);
+
+      let resolved: GraphicNovel | null = null;
 
       if (idParam) {
-        const curated = getCuratedNovelById(idParam);
-        if (curated) {
-          if (active) {
-            setNovel(curated);
-            setLoading(false);
-          }
-          return;
-        }
-        const fromLibrary = state.library[idParam]?.novel || getCachedNovel(idParam);
-        if (fromLibrary && active) {
-          setNovel(fromLibrary);
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (olParam) {
+        resolved =
+          getCuratedNovelById(idParam) ||
+          state.library[idParam]?.novel ||
+          getCachedNovel(idParam) ||
+          null;
+      } else if (olParam) {
         const normalizedId = `ol-${olParam}`;
         const curatedByOl = CURATED_NOVELS.find((n) => n.olKey === olParam);
         if (curatedByOl) {
-          if (active) {
-            setNovel(curatedByOl);
+          resolved = curatedByOl;
+        } else {
+          const cached = state.library[normalizedId]?.novel || getCachedNovel(normalizedId);
+          if (cached && active) {
+            setNovel(cached);
             setLoading(false);
           }
-          return;
+          resolved = await fetchOpenLibraryWork(olParam, cached);
         }
-
-        const cached = state.library[normalizedId]?.novel || getCachedNovel(normalizedId);
-        if (cached && active) {
-          setNovel(cached);
-          setLoading(false);
-        }
-
-        const enriched = await fetchOpenLibraryWork(olParam, cached);
-        if (active) {
-          if (enriched) setNovel(enriched);
-          setLoading(false);
-        }
-        return;
       }
 
       if (active) {
-        setNovel(null);
+        setNovel(resolved);
         setLoading(false);
+      }
+
+      const olKey = resolved?.olKey || olParam;
+      if (olKey) {
+        const extra = await fetchOpenLibraryEnrichment(olKey);
+        if (active && extra) {
+          setEnrichment(extra);
+        }
       }
     }
 
@@ -106,9 +115,10 @@ function NovelDetailClient() {
     if (!novel) return [];
     return CURATED_NOVELS.filter((other) => {
       if (other.id === novel.id) return false;
-      const sharedGenre = other.genres.some((g) => novel.genres.includes(g));
-      const sharedWriter = other.writers.some((w) => novel.writers.includes(w));
-      return sharedGenre || sharedWriter;
+      return (
+        other.genres.some((g) => novel.genres.includes(g)) ||
+        other.writers.some((w) => novel.writers.includes(w))
+      );
     })
       .sort((a, b) => {
         const scoreA =
@@ -124,14 +134,11 @@ function NovelDetailClient() {
 
   if (loading) {
     return (
-      <div className="container mx-auto max-w-screen-xl px-4 py-12">
-        <div className="flex flex-col md:flex-row gap-8">
-          <Skeleton className="w-64 aspect-[2/3] rounded-2xl shrink-0" />
-          <div className="flex-1 space-y-4">
-            <Skeleton className="h-12 w-2/3" />
-            <Skeleton className="h-6 w-1/3" />
-            <Skeleton className="h-32 w-full" />
-          </div>
+      <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-4">
+        <Skeleton className="h-9 w-full mb-4 bg-[#222222]" />
+        <div className="grid grid-cols-1 md:grid-cols-[235px_1fr] gap-5">
+          <Skeleton className="h-96 bg-[#1C1C1C]" />
+          <Skeleton className="h-96 bg-[#1C1C1C]" />
         </div>
       </div>
     );
@@ -139,53 +146,91 @@ function NovelDetailClient() {
 
   if (!novel) {
     return (
-      <div className="container mx-auto max-w-screen-md px-4 py-24 text-center space-y-4">
-        <h1 className="font-serif text-4xl">Graphic Novel Not Found</h1>
-        <p className="text-sm text-muted-foreground">
-          We couldn&apos;t find that entry in the curated catalog or Open Library.
+      <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212] px-6 py-20 text-center space-y-3">
+        <h1 className="text-xl font-bold text-white">Entry Not Found</h1>
+        <p className="text-xs text-[#9B9B9B]">
+          This graphic novel could not be loaded from the catalog or Open Library.
         </p>
-        <Link href="/">
-          <Button variant="secondary" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Discover
-          </Button>
+        <Link href="/" className="inline-block text-xs mal-link">
+          ← Return to Graphic Novels
         </Link>
       </div>
     );
   }
 
-  const userEntry = state.library[novel.id];
+  const userEntry = getEntry(novel.id);
+  const currentStatus = userEntry?.status || "none";
+  const currentRating = userEntry?.rating || 0;
+  const issuesRead = userEntry?.issuesRead || 0;
+
+  // Prefer live Open Library ratings only if non-curated and Open Library has ratings
+  const displayScore =
+    !novel.isCurated && enrichment?.average10
+      ? enrichment.average10.toFixed(2)
+      : novel.communityScore.toFixed(2);
+  const displayRatingsCount =
+    !novel.isCurated && enrichment?.ratingsCount
+      ? enrichment.ratingsCount
+      : novel.ratingsCount;
+  const displayMembers =
+    !novel.isCurated && enrichment?.members
+      ? enrichment.members
+      : novel.membersCount || novel.ratingsCount * 6;
+
+  const tabs: { id: DetailTab; label: string }[] = [
+    { id: "details", label: "Details" },
+    {
+      id: "issues",
+      label: novel.issuesList ? `Issues (${novel.issuesList.length})` : "Issues / Chapters",
+    },
+    {
+      id: "editions",
+      label: enrichment?.editions?.length
+        ? `Editions (${enrichment.editions.length})`
+        : "Editions",
+    },
+    { id: "reviews", label: `Reviews (${userLogs.length})` },
+    { id: "recs", label: "Recommendations" },
+  ];
+
+  const handleQuickStatus = (val: string) => {
+    if (val === "none") {
+      if (currentStatus !== "none") setStatus(novel, currentStatus);
+    } else {
+      const target = val as Exclude<ReadingStatus, "none">;
+      if (currentStatus !== target) setStatus(novel, target);
+    }
+  };
 
   return (
-    <div className="relative pb-20">
-      {/* Atmospheric Backdrop */}
-      <div className="relative h-[34vh] min-h-[240px] w-full overflow-hidden border-b border-white/5">
-        {novel.coverUrl && (
-          <img
-            src={novel.coverUrl}
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-cover blur-2xl scale-110 opacity-30"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/20" />
-        <div className="container mx-auto max-w-screen-xl px-4 pt-5 relative z-10">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5 text-xs font-medium text-slate-200 ring-1 ring-white/15 backdrop-blur-md hover:bg-black/75 transition-colors"
+    <>
+      <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
+        {/* MAL Title Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
+          <div>
+            <h1 className="text-lg sm:text-xl font-bold text-white leading-tight">
+              {novel.title}
+            </h1>
+            {novel.subtitle && (
+              <p className="text-xs text-[#9B9B9B]">{novel.subtitle}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setLogOpen(true)}
+            className="inline-flex items-center gap-1.5 text-xs mal-link"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Discover
-          </Link>
+            <NotebookPen className="h-3.5 w-3.5" />
+            Log / Edit
+          </button>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto max-w-screen-xl px-4 -mt-32 relative z-10">
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Sidebar */}
-          <aside className="w-full md:w-64 shrink-0 space-y-5">
-            <div className="aspect-[2/3] w-full max-w-[260px] mx-auto md:mx-0 overflow-hidden rounded-2xl bg-secondary border border-white/15 shadow-2xl">
+        {/* MAL 2-Column Database Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr]">
+          {/* LEFT SIDEBAR */}
+          <aside className="border-b md:border-b-0 md:border-r border-[#2A2A2A] p-3 space-y-4 text-xs">
+            {/* Cover */}
+            <div className="mx-auto max-w-[220px] md:max-w-none aspect-[2/3] overflow-hidden border border-[#333333] bg-[#1A1A1A]">
               {novel.coverUrl ? (
                 <img
                   src={novel.coverUrl}
@@ -193,262 +238,637 @@ function NovelDetailClient() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+                <div className="flex h-full items-center justify-center p-4 text-center text-[#9B9B9B]">
                   {novel.title}
                 </div>
               )}
             </div>
 
+            {/* Edit Status Box + Favorites + Lists + Reader Link */}
             <ListActions novel={novel} />
 
-            {/* Fact Sheet */}
-            <div className="rounded-2xl border border-white/10 bg-card p-4 space-y-3 text-xs">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Format</span>
-                <span className="font-medium text-foreground">{novel.format}</span>
-              </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Publisher</span>
-                <span className="font-medium text-foreground text-right">{novel.publisher}</span>
-              </div>
-              {novel.year > 0 && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">First Published</span>
-                  <span className="font-mono text-foreground">{novel.year}</span>
-                </div>
-              )}
-              {novel.issues && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Issues</span>
-                  <span className="font-mono text-foreground">{novel.issues}</span>
-                </div>
-              )}
-              {novel.pages && (
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Pages</span>
-                  <span className="font-mono text-foreground">{novel.pages}</span>
-                </div>
-              )}
-              {novel.olKey && (
-                <div className="pt-2 border-t border-white/10">
-                  <a
-                    href={`https://openlibrary.org/works/${novel.olKey}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    <span>View on Open Library</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              )}
-            </div>
-          </aside>
-
-          {/* Right Main Info */}
-          <div className="flex-1 space-y-8 md:pt-20 min-w-0">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {novel.genres.map((g) => (
-                  <Badge
-                    key={g}
-                    variant="secondary"
-                    className="bg-secondary/80 border border-white/10 text-xs"
-                  >
-                    {g}
-                  </Badge>
+            {/* Alternative Titles */}
+            {(novel.altTitles?.length || novel.subtitle) && (
+              <div className="space-y-1.5">
+                <h2 className="border-b border-[#2E2E2E] pb-1 font-bold text-[#E5E5E5]">
+                  Alternative Titles
+                </h2>
+                {novel.subtitle && (
+                  <p className="text-[11px] text-[#CCCCCC]">
+                    <span className="text-[#9B9B9B]">Subtitle:</span> {novel.subtitle}
+                  </p>
+                )}
+                {novel.altTitles?.map((alt) => (
+                  <p key={alt} className="text-[11px] text-[#CCCCCC]">
+                    <span className="text-[#9B9B9B]">Synonym:</span> {alt}
+                  </p>
                 ))}
               </div>
+            )}
 
-              <h1 className="font-serif text-4xl sm:text-5xl leading-[1.08] tracking-tight text-foreground">
-                {novel.title}{" "}
-                {novel.year > 0 && (
-                  <span className="font-mono text-xl sm:text-2xl text-muted-foreground font-normal ml-1">
-                    {novel.year}
-                  </span>
-                )}
-              </h1>
-
-              {novel.subtitle && (
-                <p className="text-base text-primary/90 font-medium">{novel.subtitle}</p>
-              )}
-
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground pt-1">
-                <span>
-                  Written by{" "}
-                  <strong className="text-foreground font-medium">
-                    {novel.writers.join(", ")}
-                  </strong>
-                </span>
-                <span>
-                  Art by{" "}
-                  <strong className="text-foreground font-medium">
-                    {novel.artists.join(", ")}
-                  </strong>
-                </span>
-              </div>
-            </div>
-
-            {/* Score & User Summary Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-2xl border border-white/10 bg-card/80 p-4">
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
-                  Community Avg
-                </span>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-2xl font-bold font-mono text-primary flex items-center gap-1">
-                    <Star className="h-5 w-5 fill-primary text-primary" />
-                    {novel.communityScore.toFixed(1)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({novel.ratingsCount.toLocaleString()})
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
-                  Your Rating
-                </span>
-                <div className="mt-1.5">
-                  {userEntry && userEntry.rating > 0 ? (
-                    <StarRating value={userEntry.rating} readonly size="sm" showLabel />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Not rated</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold block">
-                  Your Diary Logs
-                </span>
-                <div className="mt-1 text-lg font-mono font-semibold text-foreground flex items-center gap-2">
-                  <span>{userLogs.length}</span>
-                  {userEntry?.liked && (
-                    <Heart className="h-4 w-4 fill-rose-400 text-rose-400" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Synopsis */}
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Synopsis
+            {/* Information Table */}
+            <div className="space-y-1.5">
+              <h2 className="border-b border-[#2E2E2E] pb-1 font-bold text-[#E5E5E5]">
+                Information
               </h2>
-              {novel.deck && (
-                <p className="text-base sm:text-lg text-foreground/95 leading-relaxed font-medium">
-                  {novel.deck}
-                </p>
-              )}
-              <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-line">
-                {novel.synopsis}
-              </p>
+              <dl className="space-y-1.5 text-[11px]">
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Type: </dt>
+                  <dd className="inline text-[#8EB4FF]">{novel.format}</dd>
+                </div>
+                {novel.issues && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Issues: </dt>
+                    <dd className="inline text-[#E5E5E5] font-mono">{novel.issues}</dd>
+                  </div>
+                )}
+                {novel.pages && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Pages: </dt>
+                    <dd className="inline text-[#E5E5E5] font-mono">{novel.pages}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Status: </dt>
+                  <dd className="inline text-[#E5E5E5]">
+                    {novel.publicationStatus || "Finished"}
+                  </dd>
+                </div>
+                {novel.year > 0 && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Published: </dt>
+                    <dd className="inline text-[#E5E5E5]">{novel.year}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Publisher: </dt>
+                  <dd className="inline text-[#8EB4FF]">{novel.publisher}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Genres: </dt>
+                  <dd className="inline text-[#8EB4FF]">{novel.genres.join(", ")}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Writers: </dt>
+                  <dd className="inline text-[#8EB4FF]">{novel.writers.join(", ")}</dd>
+                </div>
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Artists: </dt>
+                  <dd className="inline text-[#8EB4FF]">{novel.artists.join(", ")}</dd>
+                </div>
+              </dl>
             </div>
 
-            {/* User Diary History for this book */}
-            <div className="space-y-4 pt-4 border-t border-white/10">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                  Your Diary &amp; Reviews ({userLogs.length})
-                </h2>
-                <Link href="/diary/" className="text-xs text-primary hover:underline">
-                  Open full diary
-                </Link>
+            {/* Statistics Table */}
+            <div className="space-y-1.5">
+              <h2 className="border-b border-[#2E2E2E] pb-1 font-bold text-[#E5E5E5]">
+                Statistics
+              </h2>
+              <dl className="space-y-1.5 text-[11px]">
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Score: </dt>
+                  <dd className="inline font-mono font-bold text-white">
+                    {displayScore}
+                  </dd>
+                  <span className="text-[#9B9B9B]">
+                    {" "}
+                    (scored by {displayRatingsCount.toLocaleString()} users)
+                  </span>
+                </div>
+                {novel.ranked && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Ranked: </dt>
+                    <dd className="inline font-mono text-white">#{novel.ranked}</dd>
+                  </div>
+                )}
+                {novel.popularity && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Popularity: </dt>
+                    <dd className="inline font-mono text-white">#{novel.popularity}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="inline text-[#9B9B9B]">Members: </dt>
+                  <dd className="inline font-mono text-white">
+                    {displayMembers.toLocaleString()}
+                  </dd>
+                </div>
+                {enrichment?.wantToRead !== undefined && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Open Library Shelves: </dt>
+                    <dd className="inline font-mono text-[#CCCCCC]">
+                      {enrichment.alreadyRead} read · {enrichment.wantToRead} plan
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {novel.olKey && (
+              <div className="pt-2 border-t border-[#2A2A2A] text-[11px]">
+                <a
+                  href={`https://openlibrary.org/works/${novel.olKey}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 mal-link"
+                >
+                  Open Library Record
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
+          </aside>
+
+          {/* RIGHT MAIN COLUMN */}
+          <div className="p-3 sm:p-4 space-y-4 min-w-0">
+            {/* MAL Sub-Nav Tabs */}
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-[#2E2E2E] pb-1.5 text-xs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "shrink-0 px-2.5 py-1 rounded-[2px] transition-colors",
+                    activeTab === tab.id
+                      ? "bg-[#2E51A2] text-white font-semibold"
+                      : "text-[#8EB4FF] hover:bg-[#1E1E1E]"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Breadcrumbs */}
+            <div className="text-[11px] text-[#9B9B9B] flex flex-wrap items-center gap-1">
+              <Link href="/" className="mal-link">
+                Top
+              </Link>
+              <span>&gt;</span>
+              <Link href="/" className="mal-link">
+                Graphic Novels
+              </Link>
+              <span>&gt;</span>
+              <span className="text-[#E5E5E5]">{novel.title}</span>
+            </div>
+
+            {/* Iconic MAL Score & Inline Action Box */}
+            <div className="border border-[#2D2D2D] bg-[#1A1A1A] p-3 space-y-3">
+              <div className="flex flex-wrap items-center gap-5">
+                {/* Blue SCORE block */}
+                <div className="flex flex-col items-center pr-5 border-r border-[#2E2E2E]">
+                  <span className="w-full text-center bg-[#2E51A2] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Score
+                  </span>
+                  <span className="mt-1 font-mono text-2xl font-bold text-white leading-none">
+                    {displayScore}
+                  </span>
+                  <span className="mt-1 text-[10px] text-[#9B9B9B]">
+                    {displayRatingsCount.toLocaleString()} users
+                  </span>
+                </div>
+
+                {/* Ranked / Popularity / Members */}
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                    {novel.ranked && (
+                      <span>
+                        <span className="text-[#9B9B9B]">Ranked </span>
+                        <strong className="font-mono text-white">#{novel.ranked}</strong>
+                      </span>
+                    )}
+                    {novel.popularity && (
+                      <span>
+                        <span className="text-[#9B9B9B]">Popularity </span>
+                        <strong className="font-mono text-white">
+                          #{novel.popularity}
+                        </strong>
+                      </span>
+                    )}
+                    <span>
+                      <span className="text-[#9B9B9B]">Members </span>
+                      <strong className="font-mono text-white">
+                        {displayMembers.toLocaleString()}
+                      </strong>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#8EB4FF] flex flex-wrap items-center gap-2">
+                    <span>{novel.year || "Archive"}</span>
+                    <span className="text-[#444444]">|</span>
+                    <span>{novel.format}</span>
+                    <span className="text-[#444444]">|</span>
+                    <span>{novel.publisher}</span>
+                  </div>
+                </div>
               </div>
 
-              {userLogs.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-white/10 bg-card/40 p-5 text-sm text-muted-foreground">
-                  No diary logs for this graphic novel yet. Use{" "}
-                  <strong className="text-foreground">Log or Review in Diary</strong> on
-                  the left to record when you read it and save your thoughts.
+              {/* Inline quick controls strip inside Score Box */}
+              <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-[#2A2A2A] text-xs">
+                <select
+                  value={currentStatus}
+                  onChange={(e) => handleQuickStatus(e.target.value)}
+                  aria-label="Reading Status"
+                  className="h-7 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                >
+                  <option value="none">+ Add to My Shelf</option>
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="inline-flex items-center gap-1 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 h-7">
+                  <Star
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      currentRating > 0
+                        ? "fill-[#FACC15] text-[#FACC15]"
+                        : "text-[#9B9B9B]"
+                    )}
+                  />
+                  <select
+                    value={currentRating}
+                    onChange={(e) => setRating(novel, Number(e.target.value))}
+                    aria-label="Quick Score"
+                    className="bg-transparent text-xs text-white focus:outline-none"
+                  >
+                    <option value={0} className="bg-[#181818]">
+                      Select
+                    </option>
+                    {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
+                      <option key={n} value={n} className="bg-[#181818]">
+                        {MAL_SCORE_LABELS[n]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {userLogs.map((log) => {
-                    const meta = getStatusMeta(log.status);
-                    const hidden = log.spoiler && !revealedSpoilers[log.id];
-                    return (
-                      <div
-                        key={log.id}
-                        className="rounded-xl border border-white/10 bg-card p-4 space-y-2.5"
+
+                <div className="inline-flex items-center gap-1.5 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2.5 h-7 text-xs text-[#CCCCCC]">
+                  <span>Issues:</span>
+                  <span className="font-mono text-white">
+                    {issuesRead}/{novel.issues || "?"}
+                  </span>
+                </div>
+
+                {userEntry?.customUrl && (
+                  <a
+                    href={userEntry.customUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-auto inline-flex items-center gap-1 rounded-[2px] bg-[#2DB039]/20 border border-[#2DB039]/40 px-2.5 h-7 text-xs font-semibold text-[#4ADE80] hover:bg-[#2DB039]/30"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Read Source
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* TAB: DETAILS */}
+            {activeTab === "details" && (
+              <div className="space-y-6">
+                {/* Synopsis */}
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                    <h2 className="text-sm font-bold text-white">Synopsis</h2>
+                  </div>
+                  {novel.deck && (
+                    <p className="text-xs sm:text-sm font-medium text-[#E5E5E5] leading-relaxed">
+                      {novel.deck}
+                    </p>
+                  )}
+                  <p className="text-xs sm:text-sm text-[#CCCCCC] leading-relaxed whitespace-pre-line">
+                    {novel.synopsis}
+                  </p>
+                </section>
+
+                {/* Background */}
+                {novel.background && (
+                  <section className="space-y-2">
+                    <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+                      Background
+                    </h2>
+                    <p className="text-xs text-[#CCCCCC] leading-relaxed">
+                      {novel.background}
+                    </p>
+                  </section>
+                )}
+
+                {/* Issues / Chapters Preview */}
+                {novel.issuesList && novel.issuesList.length > 0 && (
+                  <section className="space-y-2">
+                    <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                      <h2 className="text-sm font-bold text-white">
+                        Issues / Chapters
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("issues")}
+                        className="text-xs mal-link"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="inline-flex items-center gap-1 font-mono text-muted-foreground">
-                              <Calendar className="h-3.5 w-3.5" />
-                              {log.date}
-                            </span>
-                            {meta && (
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
+                        View all ({novel.issuesList.length})
+                      </button>
+                    </div>
+                    <div className="divide-y divide-[#252525] border border-[#2C2C2C] bg-[#161616]">
+                      {novel.issuesList.slice(0, 5).map((issue) => {
+                        const done = issuesRead >= issue.number;
+                        return (
+                          <div
+                            key={issue.number}
+                            className="flex items-center justify-between px-3 py-2 text-xs"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-[#9B9B9B] w-7 shrink-0">
+                                #{issue.number}
+                              </span>
+                              <span className="truncate text-[#E5E5E5]">
+                                {issue.title}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              {issue.date && (
+                                <span className="text-[11px] text-[#9B9B9B]">
+                                  {issue.date}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setProgress(novel, done ? issue.number - 1 : issue.number)
+                                }
+                                className={cn(
+                                  "px-2 py-0.5 rounded-[2px] border text-[11px]",
+                                  done
+                                    ? "bg-[#2E51A2] border-[#4C74D6] text-white"
+                                    : "bg-[#222222] border-[#333333] text-[#9B9B9B] hover:text-white"
+                                )}
                               >
-                                {meta.label}
+                                {done ? "Read ✓" : "Mark"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Related Entries (MAL thumbnail strip) */}
+                {relatedNovels.length > 0 && (
+                  <section className="space-y-2">
+                    <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                      <h2 className="text-sm font-bold text-white">Related Entries</h2>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("recs")}
+                        className="text-xs mal-link"
+                      >
+                        More recommendations
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {relatedNovels.slice(0, 4).map((rel) => {
+                        const sameWriter = rel.writers.some((w) =>
+                          novel.writers.includes(w)
+                        );
+                        return (
+                          <Link
+                            key={rel.id}
+                            href={getNovelHref(rel)}
+                            className="flex gap-2.5 border border-[#2C2C2C] bg-[#161616] p-2 hover:border-[#4C74D6] transition-colors"
+                          >
+                            <div className="w-11 h-16 shrink-0 bg-[#222222] overflow-hidden">
+                              {rel.coverUrl && (
+                                <img
+                                  src={rel.coverUrl}
+                                  alt={rel.title}
+                                  className="h-full w-full object-cover"
+                                />
+                              )}
+                            </div>
+                            <div className="min-w-0 text-xs space-y-0.5">
+                              <span className="text-[10px] text-[#9B9B9B] uppercase block">
+                                {sameWriter ? "Same Writer" : rel.genres[0]}
                               </span>
-                            )}
-                            <span className="inline-flex items-center gap-1 text-muted-foreground">
-                              <Layers className="h-3 w-3" />
-                              {log.edition}
+                              <span className="font-semibold mal-link block truncate">
+                                {rel.title}
+                              </span>
+                              <span className="text-[11px] text-[#9B9B9B] block truncate">
+                                {rel.format} · {rel.year}
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Reviews */}
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                    <h2 className="text-sm font-bold text-white">
+                      Your Reviews &amp; Diary ({userLogs.length})
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => setLogOpen(true)}
+                      className="text-xs mal-link"
+                    >
+                      Write a review
+                    </button>
+                  </div>
+                  <ReviewsList
+                    logs={userLogs}
+                    revealedSpoilers={revealedSpoilers}
+                    onReveal={(id) =>
+                      setRevealedSpoilers((prev) => ({ ...prev, [id]: true }))
+                    }
+                    onDelete={deleteDiaryLog}
+                  />
+                </section>
+              </div>
+            )}
+
+            {/* TAB: ISSUES / CHAPTERS */}
+            {activeTab === "issues" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] pb-2">
+                  <h2 className="text-sm font-bold text-white">
+                    Issues / Chapters Tracker
+                  </h2>
+                  <span className="text-xs font-mono text-[#CCCCCC]">
+                    Progress: {issuesRead} / {novel.issues || "?"}
+                  </span>
+                </div>
+
+                {novel.issuesList && novel.issuesList.length > 0 ? (
+                  <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
+                    {novel.issuesList.map((issue) => {
+                      const done = issuesRead >= issue.number;
+                      return (
+                        <div
+                          key={issue.number}
+                          className="flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1E1E1E]"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="font-mono text-[#9B9B9B] w-8 shrink-0">
+                              #{issue.number}
                             </span>
-                            {log.reread && (
-                              <span className="inline-flex items-center gap-1 text-sky-300">
-                                <RotateCcw className="h-3 w-3" />
-                                Re-read
+                            <span className="text-[#E5E5E5] truncate">
+                              {issue.title}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {issue.date && (
+                              <span className="text-[11px] text-[#9B9B9B]">
+                                {issue.date}
                               </span>
                             )}
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            {log.rating > 0 && (
-                              <StarRating value={log.rating} readonly size="xs" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => deleteDiaryLog(log.id)}
-                              className="text-muted-foreground hover:text-rose-400 transition-colors"
-                              aria-label="Delete diary log"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {log.review && (
-                          hidden ? (
                             <button
                               type="button"
                               onClick={() =>
-                                setRevealedSpoilers((prev) => ({
-                                  ...prev,
-                                  [log.id]: true,
-                                }))
+                                setProgress(novel, done ? issue.number - 1 : issue.number)
                               }
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-500/20"
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[2px] border text-[11px]",
+                                done
+                                  ? "bg-[#2E51A2] border-[#4C74D6] text-white"
+                                  : "bg-[#222222] border-[#333333] text-[#9B9B9B] hover:text-white"
+                              )}
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              Contains spoilers — click to reveal
+                              {done && <Check className="h-3 w-3" />}
+                              {done ? "Read" : "Mark Read"}
                             </button>
-                          ) : (
-                            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
-                              {log.review}
-                            </p>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B] space-y-2">
+                    <p>
+                      No chapter breakdown is archived for this edition yet. You can still
+                      track your exact issue/chapter count in the left sidebar or attach
+                      your own reader URL under{" "}
+                      <strong className="text-[#E5E5E5]">Reader / Source Link</strong>.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* Related Novels */}
-            {relatedNovels.length > 0 && (
-              <div className="space-y-4 pt-4 border-t border-white/10">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                  If You Liked This
+            {/* TAB: EDITIONS */}
+            {activeTab === "editions" && (
+              <div className="space-y-3">
+                <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+                  Published Editions (via Open Library)
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {enrichment?.editions?.length ? (
+                  <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
+                    {enrichment.editions.map((ed) => (
+                      <div
+                        key={ed.key}
+                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <a
+                            href={`https://openlibrary.org${ed.key}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium mal-link"
+                          >
+                            {ed.title}
+                          </a>
+                          <p className="text-[11px] text-[#9B9B9B]">
+                            {ed.publishers.join(", ") || "Unknown publisher"}
+                            {ed.format ? ` · ${ed.format}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 font-mono text-[11px] text-[#CCCCCC]">
+                          {ed.pages && <span>{ed.pages} pp.</span>}
+                          {ed.publishDate && <span>{ed.publishDate}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#9B9B9B]">
+                    No Open Library editions loaded for this entry.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* TAB: REVIEWS */}
+            {activeTab === "reviews" && (
+              <div className="space-y-4">
+                {enrichment?.ratingCounts && (
+                  <div className="border border-[#2C2C2C] bg-[#161616] p-3 space-y-2">
+                    <h3 className="text-xs font-bold text-white">
+                      Open Library Community Score Breakdown
+                    </h3>
+                    <div className="space-y-1">
+                      {[5, 4, 3, 2, 1].map((star) => {
+                        const cnt = enrichment.ratingCounts?.[String(star)] || 0;
+                        const total = enrichment.ratingsCount || 1;
+                        const pct = Math.round((cnt / total) * 100);
+                        return (
+                          <div
+                            key={star}
+                            className="flex items-center gap-2 text-[11px] font-mono"
+                          >
+                            <span className="w-8 text-[#9B9B9B]">{star}★</span>
+                            <div className="flex-1 h-2 bg-[#222222] overflow-hidden">
+                              <div
+                                className="h-full bg-[#2E51A2]"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="w-12 text-right text-[#CCCCCC]">
+                              {pct}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                  <h2 className="text-sm font-bold text-white">
+                    Your Diary Reviews ({userLogs.length})
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setLogOpen(true)}
+                    className="text-xs mal-link"
+                  >
+                    + Add Review
+                  </button>
+                </div>
+
+                <ReviewsList
+                  logs={userLogs}
+                  revealedSpoilers={revealedSpoilers}
+                  onReveal={(id) =>
+                    setRevealedSpoilers((prev) => ({ ...prev, [id]: true }))
+                  }
+                  onDelete={deleteDiaryLog}
+                />
+              </div>
+            )}
+
+            {/* TAB: RECOMMENDATIONS */}
+            {activeTab === "recs" && (
+              <div className="space-y-3">
+                <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+                  Recommended If You Liked {novel.title}
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {relatedNovels.map((rel) => (
                     <NovelCard key={rel.id} novel={rel} />
                   ))}
@@ -458,6 +878,90 @@ function NovelDetailClient() {
           </div>
         </div>
       </div>
+
+      <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialNovel={novel} />
+    </>
+  );
+}
+
+function ReviewsList({
+  logs,
+  revealedSpoilers,
+  onReveal,
+  onDelete,
+}: {
+  logs: ReturnType<typeof useGNovel>["state"]["diary"];
+  revealedSpoilers: Record<string, boolean>;
+  onReveal: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (logs.length === 0) {
+    return (
+      <div className="border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B]">
+        No diary logs or reviews recorded yet for this title.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {logs.map((log) => {
+        const meta = getStatusMeta(log.status);
+        const hidden = log.spoiler && !revealedSpoilers[log.id];
+        return (
+          <div
+            key={log.id}
+            className="border border-[#2C2C2C] bg-[#161616] p-3 space-y-2 text-xs"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#242424] pb-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[#9B9B9B]">{log.date}</span>
+                {meta && (
+                  <span
+                    className={`border px-1.5 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
+                  >
+                    {meta.label}
+                  </span>
+                )}
+                <span className="text-[#9B9B9B]">{log.edition}</span>
+                {log.reread && (
+                  <span className="inline-flex items-center gap-1 text-[#8EB4FF]">
+                    <RotateCcw className="h-3 w-3" />
+                    Re-read
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <StarRating value={log.rating} readonly size="xs" showLabel />
+                <button
+                  type="button"
+                  onClick={() => onDelete(log.id)}
+                  className="text-[#9B9B9B] hover:text-[#FB7185]"
+                  aria-label="Delete review"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {log.review &&
+              (hidden ? (
+                <button
+                  type="button"
+                  onClick={() => onReveal(log.id)}
+                  className="inline-flex items-center gap-1 border border-[#E7B715]/40 bg-[#E7B715]/10 px-2.5 py-1 text-[11px] text-[#FACC15]"
+                >
+                  <Eye className="h-3 w-3" />
+                  Contains spoilers — reveal
+                </button>
+              ) : (
+                <p className="text-xs text-[#E5E5E5] leading-relaxed whitespace-pre-line">
+                  {log.review}
+                </p>
+              ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -466,8 +970,8 @@ export default function NovelDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="container mx-auto max-w-screen-xl px-4 py-12">
-          <Skeleton className="h-64 w-full rounded-2xl" />
+        <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-6">
+          <Skeleton className="h-72 w-full bg-[#1C1C1C]" />
         </div>
       }
     >
