@@ -113,13 +113,9 @@ export function ListActions({ novel }: ListActionsProps) {
               </select>
             </div>
 
-            {/* Issues / Chap. Read Row */}
+            {/* Issues Read Row */}
             <div className="grid grid-cols-[74px_1fr] items-center gap-2">
-              <label className="text-[#B0B0B0]">
-                {novel.format === "Manga" || novel.format === "Manhwa"
-                  ? "Chap. Read:"
-                  : "Issues Read:"}
-              </label>
+              <label className="text-[#B0B0B0]">Issues Read:</label>
               <div className="flex items-center gap-1">
                 <input
                   type="number"

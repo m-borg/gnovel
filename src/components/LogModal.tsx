@@ -5,7 +5,6 @@ import { X, Search, Heart, RotateCcw, EyeOff, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "./StarRating";
-import { browseAniList } from "@/lib/anilist";
 import { CURATED_NOVELS } from "@/lib/catalog";
 import { searchOpenLibrary } from "@/lib/openlibrary";
 import { STATUS_OPTIONS } from "@/lib/status";
@@ -87,20 +86,8 @@ function LogModalBody({
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const [olRes, alRes] = await Promise.allSettled([
-          searchOpenLibrary(trimmed, true, controller.signal),
-          browseAniList({
-            query: trimmed,
-            page: 1,
-            perPage: 5,
-            signal: controller.signal,
-          }),
-        ]);
-        const merged = [
-          ...(olRes.status === "fulfilled" ? olRes.value.slice(0, 4) : []),
-          ...(alRes.status === "fulfilled" ? alRes.value.items.slice(0, 4) : []),
-        ];
-        setRemoteResults(merged);
+        const res = await searchOpenLibrary(trimmed, true, controller.signal);
+        setRemoteResults(res.slice(0, 6));
       } catch {
         // Ignore abort
       } finally {

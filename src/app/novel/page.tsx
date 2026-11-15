@@ -16,14 +16,15 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ListActions } from "@/components/ListActions";
 import { NovelCard, getNovelHref } from "@/components/NovelCard";
+import { CreatorLinks } from "@/components/CreatorLinks";
 import { StarRating } from "@/components/StarRating";
 import { LogModal } from "@/components/LogModal";
 import { CURATED_NOVELS, getCuratedNovelById } from "@/lib/catalog";
-import { fetchAniListById } from "@/lib/anilist";
 import {
   fetchOpenLibraryEnrichment,
   fetchOpenLibraryWork,
   getCachedNovel,
+  getCreatorHref,
 } from "@/lib/openlibrary";
 import { MAL_SCORE_LABELS, STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
@@ -40,7 +41,6 @@ function NovelDetailClient() {
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
   const olParam = searchParams.get("ol");
-  const alParam = searchParams.get("al");
 
   const {
     state,
@@ -73,20 +73,6 @@ function NovelDetailClient() {
           state.library[idParam]?.novel ||
           getCachedNovel(idParam) ||
           null;
-      } else if (alParam) {
-        const alNum = parseInt(alParam, 10);
-        const normalizedId = `al-${alParam}`;
-        const cached =
-          state.library[normalizedId]?.novel || getCachedNovel(normalizedId);
-        if (cached && active) {
-          setNovel(cached);
-          setLoading(false);
-        }
-        if (!Number.isNaN(alNum)) {
-          resolved = await fetchAniListById(alNum, cached);
-        } else {
-          resolved = cached || null;
-        }
       } else if (olParam) {
         const normalizedId = `ol-${olParam}`;
         const curatedByOl = CURATED_NOVELS.find((n) => n.olKey === olParam);
@@ -120,7 +106,7 @@ function NovelDetailClient() {
     return () => {
       active = false;
     };
-  }, [idParam, olParam, alParam, state.library]);
+  }, [idParam, olParam, state.library]);
 
   const userLogs = useMemo(() => {
     if (!novel) return [];
@@ -292,19 +278,9 @@ function NovelDetailClient() {
                   <dt className="inline text-[#9B9B9B]">Type: </dt>
                   <dd className="inline text-[#8EB4FF]">{novel.format}</dd>
                 </div>
-                {novel.volumes && (
-                  <div>
-                    <dt className="inline text-[#9B9B9B]">Volumes: </dt>
-                    <dd className="inline text-[#E5E5E5] tabular-nums">{novel.volumes}</dd>
-                  </div>
-                )}
                 {novel.issues && (
                   <div>
-                    <dt className="inline text-[#9B9B9B]">
-                      {novel.format === "Manga" || novel.format === "Manhwa"
-                        ? "Chapters: "
-                        : "Issues: "}
-                    </dt>
+                    <dt className="inline text-[#9B9B9B]">Issues: </dt>
                     <dd className="inline text-[#E5E5E5] tabular-nums">{novel.issues}</dd>
                   </div>
                 )}
@@ -336,11 +312,15 @@ function NovelDetailClient() {
                 </div>
                 <div>
                   <dt className="inline text-[#9B9B9B]">Writers: </dt>
-                  <dd className="inline text-[#8EB4FF]">{novel.writers.join(", ")}</dd>
+                  <dd className="inline">
+                    <CreatorLinks names={novel.writers} />
+                  </dd>
                 </div>
                 <div>
                   <dt className="inline text-[#9B9B9B]">Artists: </dt>
-                  <dd className="inline text-[#8EB4FF]">{novel.artists.join(", ")}</dd>
+                  <dd className="inline">
+                    <CreatorLinks names={novel.artists} />
+                  </dd>
                 </div>
               </dl>
             </div>
@@ -390,30 +370,17 @@ function NovelDetailClient() {
               </dl>
             </div>
 
-            {(novel.olKey || novel.anilistId) && (
-              <div className="pt-2 border-t border-[#2A2A2A] text-[11px] space-y-1">
-                {novel.olKey && (
-                  <a
-                    href={`https://openlibrary.org/works/${novel.olKey}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 mal-link"
-                  >
-                    Open Library Record
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-                {novel.anilistId && (
-                  <a
-                    href={`https://anilist.co/manga/${novel.anilistId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 mal-link"
-                  >
-                    AniList Manga Record
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
+            {novel.olKey && (
+              <div className="pt-2 border-t border-[#2A2A2A] text-[11px]">
+                <a
+                  href={`https://openlibrary.org/works/${novel.olKey}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 mal-link"
+                >
+                  Open Library Record
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             )}
           </aside>
@@ -446,9 +413,7 @@ function NovelDetailClient() {
               </Link>
               <span>&gt;</span>
               <Link href="/" className="mal-link">
-                {novel.format === "Manga" || novel.format === "Manhwa"
-                  ? "Manga & Graphic Novels"
-                  : "Graphic Novels"}
+                Graphic Novels
               </Link>
               <span>&gt;</span>
               <span className="text-[#E5E5E5]">{novel.title}</span>
@@ -503,6 +468,11 @@ function NovelDetailClient() {
                       <span>{novel.format}</span>
                       <span className="text-[#444444]">|</span>
                       <span>{novel.publisher}</span>
+                      <span className="text-[#444444]">|</span>
+                      <CreatorLinks
+                        names={Array.from(new Set([...novel.writers, ...novel.artists]))}
+                        max={3}
+                      />
                     </div>
                   </div>
                 </div>
@@ -549,19 +519,8 @@ function NovelDetailClient() {
                     />
                   </div>
 
-                  {novel.volumes && (
-                    <div className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#333333] bg-[#222222] px-2.5 h-7 text-xs text-[#CCCCCC] tabular-nums">
-                      <span>Volumes:</span>
-                      <span className="text-white">{novel.volumes}</span>
-                    </div>
-                  )}
-
                   <div className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#333333] bg-[#222222] px-2.5 h-7 text-xs text-[#CCCCCC] tabular-nums">
-                    <span>
-                      {novel.format === "Manga" || novel.format === "Manhwa"
-                        ? "Chapters:"
-                        : "Issues:"}
-                    </span>
+                    <span>Issues:</span>
                     <span className="text-white">
                       {issuesRead}/{novel.issues || "?"}
                     </span>
@@ -616,6 +575,56 @@ function NovelDetailClient() {
                     </p>
                   </section>
                 )}
+
+                {/* Creators & Credits */}
+                <section className="space-y-2">
+                  <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
+                    <h2 className="text-sm font-bold text-white">
+                      Creators (Writers &amp; Artists)
+                    </h2>
+                    <Link href="/creator/" className="text-xs mal-link">
+                      Browse all creators
+                    </Link>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {Array.from(new Set([...novel.writers, ...novel.artists])).map(
+                      (person) => {
+                        const isW = novel.writers.includes(person);
+                        const isA = novel.artists.includes(person);
+                        const role =
+                          isW && isA
+                            ? "Writer & Artist"
+                            : isA
+                            ? "Artist"
+                            : "Writer";
+                        const initials = person
+                          .split(/\s+/)
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase() || "")
+                          .join("");
+                        return (
+                          <Link
+                            key={person}
+                            href={getCreatorHref(person)}
+                            className="flex items-center gap-2.5 rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-2 hover:border-[#4C74D6] transition-colors"
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[3px] bg-[#2E51A2]/25 border border-[#4C74D6]/40 text-xs font-bold text-[#8EB4FF]">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="block text-xs font-bold mal-link truncate">
+                                {person}
+                              </span>
+                              <span className="block text-[11px] text-[#9B9B9B]">
+                                {role} · View profile &amp; works
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                      }
+                    )}
+                  </div>
+                </section>
 
                 {/* Issues / Chapters Preview */}
                 {novel.issuesList && novel.issuesList.length > 0 && (

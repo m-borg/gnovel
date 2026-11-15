@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 const BLUE_BAR_LINKS = [
   { href: "/", label: "Graphic Novels" },
+  { href: "/creator/", label: "Creators" },
   { href: "/shelf/", label: "My Shelf" },
   { href: "/diary/", label: "Diary" },
   { href: "/lists/", label: "Lists" },
@@ -31,16 +32,20 @@ export function Navbar() {
   const [logOpen, setLogOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [navSearch, setNavSearch] = useState("");
-  const [navScope, setNavScope] = useState<"all" | "comics" | "manga" | "curated">("all");
+  const [navScope, setNavScope] = useState<"all" | "creators" | "curated">("all");
 
   const trackedCount = mounted ? Object.keys(state.library).length : 0;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const q = navSearch.trim();
+    if (navScope === "creators") {
+      router.push(q ? `/creator/?name=${encodeURIComponent(q)}` : "/creator/");
+      return;
+    }
     const params = new URLSearchParams();
     if (q) params.set("q", q);
-    if (navScope !== "all") params.set("scope", navScope);
+    if (navScope === "curated") params.set("scope", "curated");
     const qs = params.toString();
     router.push(qs ? `/?${qs}` : "/");
   };
@@ -129,7 +134,7 @@ export function Navbar() {
                 );
               })}
               <Link
-                href="/novel/?id=akira"
+                href="/novel/?id=watchmen"
                 className={cn(
                   "hidden md:inline-block shrink-0 px-2.5 py-1 text-xs font-bold tracking-tight transition-colors rounded-[3px]",
                   pathname.startsWith("/novel")
@@ -152,22 +157,21 @@ export function Navbar() {
                 value={navScope}
                 onChange={(e) =>
                   setNavScope(
-                    e.target.value as "all" | "comics" | "manga" | "curated"
+                    e.target.value as "all" | "creators" | "curated"
                   )
                 }
                 aria-label="Search scope"
                 className="h-7 shrink-0 border-r border-[#2C2C2C] bg-[#1D1D1D] px-2 text-[11px] font-medium text-[#E5E5E5] focus:outline-none"
               >
                 <option value="all">All</option>
-                <option value="comics">Comics &amp; GNs</option>
-                <option value="manga">Manga &amp; Manhwa</option>
-                <option value="curated">Curated Top</option>
+                <option value="creators">Creators</option>
+                <option value="curated">Curated</option>
               </select>
               <input
                 type="search"
                 value={navSearch}
                 onChange={(e) => setNavSearch(e.target.value)}
-                placeholder="Search Graphic Novels, Manga, and more..."
+                placeholder="Search Graphic Novels, Comics, Creators..."
                 className="h-7 w-full bg-[#141414] px-2.5 text-xs text-white placeholder:text-[#8A8A8A] focus:outline-none"
               />
               <button

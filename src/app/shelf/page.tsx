@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { NovelCard, getNovelHref } from "@/components/NovelCard";
 import { LogModal } from "@/components/LogModal";
+import { CreatorLinks } from "@/components/CreatorLinks";
 import { CURATED_NOVELS, getCuratedNovelById } from "@/lib/catalog";
 import { MAL_SCORE_LABELS, STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
@@ -425,7 +426,13 @@ export default function ShelfPage() {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#9B9B9B]">
-                            <span>{entry.novel.writers[0]}</span>
+                            <CreatorLinks
+                              names={Array.from(
+                                new Set([...entry.novel.writers, ...entry.novel.artists])
+                              )}
+                              max={2}
+                            />
+                            <span>·</span>
                             <button
                               type="button"
                               onClick={() => setLogNovel(entry.novel)}

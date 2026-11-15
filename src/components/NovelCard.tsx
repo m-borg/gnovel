@@ -8,6 +8,7 @@ import { getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
 import type { GraphicNovel } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { CreatorLinks } from "./CreatorLinks";
 
 interface NovelCardProps {
   novel: GraphicNovel;
@@ -18,9 +19,6 @@ interface NovelCardProps {
 export function getNovelHref(novel: GraphicNovel): string {
   if (novel.isCurated) {
     return `/novel/?id=${encodeURIComponent(novel.id)}`;
-  }
-  if (novel.anilistId) {
-    return `/novel/?al=${encodeURIComponent(String(novel.anilistId))}`;
   }
   const ol = novel.olKey || novel.id.replace(/^ol-/, "");
   return `/novel/?ol=${encodeURIComponent(ol)}`;
@@ -159,7 +157,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
 
         <div className="flex items-center justify-between gap-2 text-[11px] text-[#9B9B9B]">
           <span className="truncate">
-            {novel.writers[0]}
+            <CreatorLinks names={novel.writers} max={1} />
             {novel.year ? ` · ${novel.year}` : ""}
           </span>
 

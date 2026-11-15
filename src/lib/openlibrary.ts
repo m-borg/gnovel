@@ -1,4 +1,9 @@
-import type { GraphicNovel, NovelFormat, OpenLibraryEnrichment } from "./types";
+import type {
+  CreatorProfile,
+  GraphicNovel,
+  NovelFormat,
+  OpenLibraryEnrichment,
+} from "./types";
 
 interface OLSearchDoc {
   key: string;
@@ -36,9 +41,20 @@ interface OLEditionDoc {
 
 const CACHE_KEY = "gnovel:ol-cache:v2";
 
+function isMangaLike(subjects: string[] = [], title = ""): boolean {
+  const joined = `${subjects.join(" ")} ${title}`.toLowerCase();
+  return (
+    /\bmanga\b/.test(joined) ||
+    /\bmanhwa\b/.test(joined) ||
+    /\bmanhua\b/.test(joined) ||
+    /\bshonen\b/.test(joined) ||
+    /\bseinen\b/.test(joined) ||
+    /\bshojo\b/.test(joined)
+  );
+}
+
 function inferFormat(subjects: string[] = [], title = ""): NovelFormat {
   const joined = `${subjects.join(" ")} ${title}`.toLowerCase();
-  if (joined.includes("manga")) return "Manga";
   if (joined.includes("omnibus")) return "Omnibus";
   if (joined.includes("vol.") || joined.includes("volume")) return "Series";
   return "Graphic Novel";
@@ -54,7 +70,6 @@ function cleanGenres(subjects: string[] = []): string[] {
     ["Noir & Crime", ["crime", "mystery", "detective", "noir", "thriller"]],
     ["Superhero", ["superhero", "batman", "superman", "spider-man", "x-men", "avengers"]],
     ["Memoir & History", ["biography", "memoir", "autobiography", "history", "historical"]],
-    ["Manga", ["manga", "seinen", "shonen", "shojo"]],
     ["Slice of Life", ["coming of age", "slice of life", "teen", "drama", "romance"]],
   ];
   for (const [label, keywords] of rules) {
@@ -64,6 +79,10 @@ function cleanGenres(subjects: string[] = []): string[] {
   }
   if (mapped.length === 0) mapped.push("Comics & Graphic Novels");
   return mapped.slice(0, 3);
+}
+
+export function getCreatorHref(name: string): string {
+  return `/creator/?name=${encodeURIComponent(name)}`;
 }
 
 export function extractOlId(key: string): string {
@@ -144,7 +163,9 @@ function mapOlDocToNovel(doc: OLSearchDoc, rankHint?: number): GraphicNovel {
       `Archived graphic novel work (${doc.edition_count || 1} known editions on Open Library).`,
     synopsis:
       "Loaded from the Open Library community archive. Open this entry to view live community ratings, published editions, and synopsis.",
-    coverUrl: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+    coverUrl: doc.cover_i
+      ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`
+      : "",
     communityScore: score10,
     ratingsCount: doc.ratings_count || (doc.edition_count || 1) * 24,
     membersCount: members,
@@ -169,7 +190,7 @@ export async function browseOpenLibraryCatalog({
   signal?: AbortSignal;
 }): Promise<CatalogBrowseResult> {
   const exclusions =
-    'NOT subject:"Drama" NOT subject:"Plays" NOT subject:"Classic Literature" NOT subject:"Study guides" NOT subject:"Criticism and interpretation" NOT subject:"Greg Heffley (Fictitious character)"';
+    'NOT subject:"Manga" NOT subject:"Shonen" NOT subject:"Seinen" NOT subject:"Shojo" NOT subject:"Manhwa" NOT subject:"Drama" NOT subject:"Plays" NOT subject:"Classic Literature" NOT subject:"Study guides" NOT subject:"Criticism and interpretation" NOT subject:"Greg Heffley (Fictitious character)"';
 
   const categoryClauses: Record<OpenLibraryCategory, string> = {
     all: '(subject:"Graphic novels" OR subject:"Comic books, strips, etc.")',
@@ -198,7 +219,7 @@ export async function browseOpenLibraryCatalog({
   const docs: OLSearchDoc[] = data.docs || [];
 
   const items = docs
-    .filter((d) => d.key && d.title && d.cover_i)
+    .filter((d) => d.key && d.title && d.cover_i && !isMangaLike(d.subject, d.title))
     .map((doc, idx) => mapOlDocToNovel(doc, (page - 1) * perPage + idx + 1));
 
   return {
@@ -218,12 +239,12 @@ export async function searchOpenLibrary(
   if (!trimmed) return [];
 
   const q = comicsOnly
-    ? `${trimmed} (subject:"Comic books, strips, etc." OR subject:"Graphic novels" OR subject:"Manga")`
-    : trimmed;
+    ? `${trimmed} (subject:"Comic books, strips, etc." OR subject:"Graphic novels") NOT subject:"Manga" NOT subject:"Manhwa"`
+    : `${trimmed} NOT subject:"Manga" NOT subject:"Manhwa"`;
 
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
-  )}&limit=24&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+  )}&limit=28&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Open Library search failed");
@@ -235,9 +256,205 @@ export async function searchOpenLibrary(
   }
 
   return docs
-    .filter((d) => d.key && d.title && d.cover_i)
-    .slice(0, 20)
+    .filter((d) => d.key && d.title && d.cover_i && !isMangaLike(d.subject, d.title))
+    .slice(0, 24)
     .map((doc) => mapOlDocToNovel(doc));
+}
+
+interface OLAuthorSearchDoc {
+  key?: string;
+  name?: string;
+  birth_date?: string;
+  death_date?: string;
+  top_work?: string;
+  work_count?: number;
+  top_subjects?: string[];
+}
+
+interface OLAuthorDetail {
+  key?: string;
+  name?: string;
+  personal_name?: string;
+  birth_date?: string;
+  death_date?: string;
+  alternate_names?: string[];
+  photos?: number[];
+  bio?: string | { value?: string };
+  links?: { title?: string; url?: string }[];
+}
+
+export async function fetchCreatorProfile(
+  name: string,
+  knownRoles: ("Writer" | "Artist")[] = []
+): Promise<CreatorProfile> {
+  const trimmed = name.trim();
+  const profile: CreatorProfile = {
+    name: trimmed,
+    links: [],
+    roles: knownRoles,
+  };
+
+  try {
+    const searchRes = await fetch(
+      `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(trimmed)}&limit=5`
+    );
+    let authorKey: string | undefined;
+    let searchDoc: OLAuthorSearchDoc | undefined;
+
+    if (searchRes.ok) {
+      const sData = await searchRes.json();
+      const docs: OLAuthorSearchDoc[] = sData.docs || [];
+      searchDoc =
+        docs.find(
+          (d) => (d.name || "").toLowerCase() === trimmed.toLowerCase()
+        ) || docs[0];
+      authorKey = searchDoc?.key;
+      if (searchDoc) {
+        profile.olKey = searchDoc.key;
+        profile.name = searchDoc.name || trimmed;
+        profile.birthDate = searchDoc.birth_date;
+        profile.deathDate = searchDoc.death_date;
+        profile.workCount = searchDoc.work_count;
+        profile.topSubjects = searchDoc.top_subjects
+          ?.filter((s) => !/manga|shonen|seinen|shojo/i.test(s))
+          .slice(0, 6);
+      }
+    }
+
+    const [detailRes, wikiRes] = await Promise.allSettled([
+      authorKey
+        ? fetch(`https://openlibrary.org/authors/${authorKey}.json`)
+        : Promise.resolve(null),
+      fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
+          trimmed.replace(/\s+/g, "_")
+        )}`
+      ),
+    ]);
+
+    if (
+      detailRes.status === "fulfilled" &&
+      detailRes.value &&
+      detailRes.value.ok
+    ) {
+      const detail: OLAuthorDetail = await detailRes.value.json();
+      profile.birthDate = detail.birth_date || profile.birthDate;
+      profile.deathDate = detail.death_date || profile.deathDate;
+      profile.alternateNames = detail.alternate_names?.slice(0, 6);
+
+      const rawBio =
+        typeof detail.bio === "string" ? detail.bio : detail.bio?.value || "";
+      const cleanBio = rawBio
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/----------[\s\S]*$/m, "")
+        .trim();
+      if (cleanBio) {
+        profile.bio = cleanBio;
+      }
+
+      const photoId = detail.photos?.find((p) => p > 0);
+      if (photoId) {
+        profile.photoUrl = `https://covers.openlibrary.org/a/id/${photoId}-L.jpg`;
+      }
+
+      if (detail.links?.length) {
+        profile.links = detail.links
+          .filter((l): l is { title?: string; url: string } => Boolean(l.url))
+          .slice(0, 5)
+          .map((l) => ({
+            title: l.title || "External Link",
+            url: l.url,
+          }));
+      }
+    }
+
+    if (wikiRes.status === "fulfilled" && wikiRes.value.ok) {
+      const wiki = await wikiRes.value.json();
+      if (wiki?.type === "standard") {
+        if (!profile.photoUrl && wiki.thumbnail?.source) {
+          profile.photoUrl = wiki.thumbnail.source;
+        }
+        if (
+          wiki.extract &&
+          (!profile.bio || profile.bio.length < 80)
+        ) {
+          profile.bio = wiki.extract;
+        }
+        if (wiki.content_urls?.desktop?.page) {
+          profile.wikipediaUrl = wiki.content_urls.desktop.page;
+        }
+      }
+    }
+  } catch {
+    // Keep base profile safely on network fallback
+  }
+
+  return profile;
+}
+
+export async function fetchCreatorWorks({
+  authorKey,
+  authorName,
+  comicsOnly = true,
+  sort = "score",
+  page = 1,
+  perPage = 48,
+  signal,
+}: {
+  authorKey?: string;
+  authorName: string;
+  comicsOnly?: boolean;
+  sort?: CatalogSortMode;
+  page?: number;
+  perPage?: number;
+  signal?: AbortSignal;
+}): Promise<CatalogBrowseResult> {
+  const baseQuery = authorKey
+    ? `author_key:${authorKey}`
+    : `author:"${authorName.replace(/"/g, "")}"`;
+  const scopeClause = comicsOnly
+    ? ' AND (subject:"Comic books, strips, etc." OR subject:"Graphic novels" OR subject:"Comics & graphic novels")'
+    : "";
+  const q = `${baseQuery}${scopeClause} NOT subject:"Manga" NOT subject:"Manhwa"`;
+
+  const sortParam =
+    sort === "popularity"
+      ? "readinglog"
+      : sort === "newest"
+      ? "new"
+      : "rating";
+
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
+    q
+  )}&sort=${sortParam}&limit=${perPage}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error("Failed to fetch creator works");
+  const data = await res.json();
+  const docs: OLSearchDoc[] = data.docs || [];
+
+  const items = docs
+    .filter((d) => d.key && d.title && !isMangaLike(d.subject, d.title))
+    .map((doc, idx) =>
+      mapOlDocToNovel(
+        {
+          ...doc,
+          cover_i: doc.cover_i,
+        },
+        (page - 1) * perPage + idx + 1
+      )
+    )
+    .map((n) => ({
+      ...n,
+      coverUrl: n.coverUrl.includes("undefined") ? "" : n.coverUrl,
+    }));
+
+  return {
+    items,
+    totalFound: data.numFound || items.length,
+    page,
+    perPage,
+  };
 }
 
 export async function fetchOpenLibraryWork(

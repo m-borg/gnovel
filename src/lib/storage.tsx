@@ -38,12 +38,12 @@ function buildStarterState(): UserStoreState {
   const daytripper = pick("daytripper");
   const monstress = pick("monstress");
   const maus = pick("maus");
-  const akira = pick("akira");
+  const sandman = pick("sandman");
   const asterios = pick("asterios-polyp");
 
   return {
     version: 3,
-    favorites: ["watchmen", "daytripper", "maus", "akira"],
+    favorites: ["watchmen", "daytripper", "maus", "sandman"],
     library: {
       [watchmen.id]: {
         novelId: watchmen.id,
@@ -90,13 +90,13 @@ function buildStarterState(): UserStoreState {
         issuesRead: 0,
         updatedAt: now,
       },
-      [akira.id]: {
-        novelId: akira.id,
-        novel: akira,
+      [sandman.id]: {
+        novelId: sandman.id,
+        novel: sandman,
         status: "completed",
         rating: 9,
         liked: true,
-        issuesRead: 6,
+        issuesRead: 75,
         updatedAt: now,
       },
       [asterios.id]: {
@@ -154,15 +154,15 @@ function buildStarterState(): UserStoreState {
       },
       {
         id: "seed-4",
-        novelId: akira.id,
-        novel: akira,
+        novelId: sandman.id,
+        novel: sandman,
         date: "2026-09-27",
         status: "completed",
         rating: 9,
         edition: "TPB / Paperback",
         reread: false,
         review:
-          "The sense of architectural scale and kinetic destruction across Otomo's spreads is still completely unmatched.",
+          "Season of Mists alone earns every ounce of Sandman's reputation. Lucifer handing Dream the key to Hell is unforgettable.",
         spoiler: false,
         createdAt: "2026-09-27T18:45:00.000Z",
       },
@@ -177,7 +177,7 @@ function buildStarterState(): UserStoreState {
           { novelId: watchmen.id, novel: watchmen, note: "Still the blueprint." },
           { novelId: maus.id, novel: maus, note: "Essential historical witness." },
           { novelId: daytripper.id, novel: daytripper, note: "Pure emotional precision." },
-          { novelId: akira.id, novel: akira, note: "Unmatched visual velocity." },
+          { novelId: sandman.id, novel: sandman, note: "Mythology woven effortlessly." },
         ],
         updatedAt: now,
       },

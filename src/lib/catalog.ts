@@ -77,78 +77,6 @@ export const CURATED_NOVELS: GraphicNovel[] = [
     isCurated: true,
   },
   {
-    id: "nausicaa",
-    olKey: "OL3963482W",
-    title: "Nausicaä of the Valley of the Wind",
-    altTitles: ["Kaze no Tani no Naushika", "風の谷のナウシカ"],
-    writers: ["Hayao Miyazaki"],
-    artists: ["Hayao Miyazaki"],
-    publisher: "Viz Media",
-    year: 1982,
-    publicationStatus: "Finished",
-    issues: 7,
-    pages: 1096,
-    format: "Manga",
-    genres: ["Sci-Fi", "Dark Fantasy", "Adventure"],
-    deck: "A thousand years after ecological collapse, a young princess seeks peace between warring empires and a toxic jungle.",
-    synopsis:
-      "Far darker, richer, and more intricate than the 1984 film adaptation, Miyazaki's 12-year manga magnum opus follows Nausicaä into the deepest mysteries of the Sea of Corruption and humanity's survival.",
-    background:
-      "Published intermittently in Animage from 1982 to 1994 while Studio Ghibli produced its feature films.",
-    issuesList: [
-      { number: 1, title: "Volume 1", date: "1982" },
-      { number: 2, title: "Volume 2", date: "1983" },
-      { number: 3, title: "Volume 3", date: "1984" },
-      { number: 4, title: "Volume 4", date: "1987" },
-      { number: 5, title: "Volume 5", date: "1991" },
-      { number: 6, title: "Volume 6", date: "1993" },
-      { number: 7, title: "Volume 7", date: "1995" },
-    ],
-    coverUrl: olCover(813448),
-    communityScore: 9.32,
-    ratingsCount: 8970,
-    membersCount: 74200,
-    ranked: 3,
-    popularity: 12,
-    isCurated: true,
-  },
-  {
-    id: "akira",
-    olKey: "OL8463012W",
-    title: "Akira",
-    subtitle: "Vol. 1",
-    altTitles: ["アキラ"],
-    writers: ["Katsuhiro Otomo"],
-    artists: ["Katsuhiro Otomo"],
-    publisher: "Kodansha",
-    year: 1982,
-    publicationStatus: "Finished",
-    issues: 6,
-    pages: 364,
-    format: "Manga",
-    genres: ["Sci-Fi", "Cyberpunk", "Action"],
-    deck: "A teenage biker gang in Neo-Tokyo collides with a secret military psychic experiment thirty years after World War III.",
-    synopsis:
-      "Tetsuo Shima's motorcycle crash awakens latent telekinetic powers that threaten to tear Neo-Tokyo apart, forcing his friend Kaneda into a maelstrom of revolutionaries, corrupt generals, and the mythic power known as Akira.",
-    background:
-      "Serialized in Young Magazine from 1982 to 1990 across more than 2,100 pages.",
-    issuesList: [
-      { number: 1, title: "Book 1: Tetsuo", date: "1984" },
-      { number: 2, title: "Book 2: Akira", date: "1985" },
-      { number: 3, title: "Book 3: Great Tokyo Empire", date: "1986" },
-      { number: 4, title: "Book 4: Kei", date: "1987" },
-      { number: 5, title: "Book 5: Akira Awakening", date: "1990" },
-      { number: 6, title: "Book 6: Kaneda", date: "1993" },
-    ],
-    coverUrl: olCover(814967),
-    communityScore: 9.21,
-    ratingsCount: 13840,
-    membersCount: 118500,
-    ranked: 4,
-    popularity: 5,
-    isCurated: true,
-  },
-  {
     id: "saga",
     olKey: "OL16799356W",
     title: "Saga",
@@ -749,7 +677,7 @@ export const EDITORIAL_COLLECTIONS: EditorialCollection[] = [
     subtitle: "Six landmark works that redefined what sequential art can hold.",
     curator: "GNovel Editorial",
     accent: "from-[#2E51A2]/25 to-[#161616]",
-    novelIds: ["watchmen", "maus", "sandman", "persepolis", "akira", "asterios-polyp"],
+    novelIds: ["watchmen", "maus", "sandman", "persepolis", "from-hell", "asterios-polyp"],
   },
   {
     id: "sci-fi-odysseys",
@@ -757,7 +685,7 @@ export const EDITORIAL_COLLECTIONS: EditorialCollection[] = [
     subtitle: "Galactic fugitives, psychic wastelands, and collapsing timelines.",
     curator: "GNovel Editorial",
     accent: "from-[#2E51A2]/20 to-[#161616]",
-    novelIds: ["saga", "akira", "nausicaa", "paper-girls", "y-the-last-man", "v-for-vendetta"],
+    novelIds: ["saga", "paper-girls", "y-the-last-man", "v-for-vendetta", "monstress", "watchmen"],
   },
   {
     id: "shadow-and-dread",
@@ -776,6 +704,44 @@ export const EDITORIAL_COLLECTIONS: EditorialCollection[] = [
     novelIds: ["daytripper", "blankets", "fun-home", "ghost-world", "persepolis", "maus"],
   },
 ];
+
+export interface CuratedCreatorSummary {
+  name: string;
+  roles: ("Writer" | "Artist")[];
+  curatedWorks: GraphicNovel[];
+}
+
+export function getCreatorDirectory(): CuratedCreatorSummary[] {
+  const map = new Map<
+    string,
+    { roles: Set<"Writer" | "Artist">; works: Map<string, GraphicNovel> }
+  >();
+
+  for (const novel of CURATED_NOVELS) {
+    for (const writer of novel.writers) {
+      const entry = map.get(writer) || { roles: new Set(), works: new Map() };
+      entry.roles.add("Writer");
+      entry.works.set(novel.id, novel);
+      map.set(writer, entry);
+    }
+    for (const artist of novel.artists) {
+      const entry = map.get(artist) || { roles: new Set(), works: new Map() };
+      entry.roles.add("Artist");
+      entry.works.set(novel.id, novel);
+      map.set(artist, entry);
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([name, val]) => ({
+      name,
+      roles: Array.from(val.roles),
+      curatedWorks: Array.from(val.works.values()).sort(
+        (a, b) => b.communityScore - a.communityScore
+      ),
+    }))
+    .sort((a, b) => b.curatedWorks.length - a.curatedWorks.length || a.name.localeCompare(b.name));
+}
 
 export const ALL_GENRES = Array.from(
   new Set(CURATED_NOVELS.flatMap((n) => n.genres))

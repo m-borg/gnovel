@@ -1,9 +1,19 @@
-export type NovelFormat =
-  | "Series"
-  | "Graphic Novel"
-  | "Omnibus"
-  | "Manga"
-  | "Manhwa";
+export type NovelFormat = "Series" | "Graphic Novel" | "Omnibus";
+
+export interface CreatorProfile {
+  name: string;
+  olKey?: string;
+  bio?: string;
+  birthDate?: string;
+  deathDate?: string;
+  alternateNames?: string[];
+  photoUrl?: string;
+  wikipediaUrl?: string;
+  links: { title: string; url: string }[];
+  topSubjects?: string[];
+  workCount?: number;
+  roles: ("Writer" | "Artist")[];
+}
 
 export type ReadingStatus =
   | "none"

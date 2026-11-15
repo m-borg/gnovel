@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogModal } from "@/components/LogModal";
+import { CreatorLinks } from "@/components/CreatorLinks";
 import { StarRating } from "@/components/StarRating";
 import { getNovelHref } from "@/components/NovelCard";
 import { getStatusMeta } from "@/lib/status";
@@ -156,7 +157,7 @@ export default function DiaryPage() {
                                 {entry.novel.title}
                               </Link>
                               <p className="text-[11px] text-[#9B9B9B] truncate">
-                                {entry.novel.writers.join(", ")}
+                                <CreatorLinks names={entry.novel.writers} max={2} />
                                 {entry.novel.year ? ` · ${entry.novel.year}` : ""}
                               </p>
                             </div>

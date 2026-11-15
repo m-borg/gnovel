@@ -19,8 +19,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NovelCard, getNovelHref } from "@/components/NovelCard";
+import { CreatorLinks } from "@/components/CreatorLinks";
 import { LogModal } from "@/components/LogModal";
-import { browseAniList } from "@/lib/anilist";
 import {
   ALL_GENRES,
   CURATED_NOVELS,
@@ -38,33 +38,16 @@ import { useGNovel } from "@/lib/storage";
 import type { GraphicNovel, ReadingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type CatalogScope = "all" | "comics" | "manga" | "curated";
+type CatalogScope = "all" | "curated";
 type SortOption = "score" | "popularity" | "newest";
-type MangaOrigin = "all" | "JP" | "KR";
 
-const COMIC_CATEGORIES: { id: OpenLibraryCategory; label: string; alGenre?: string }[] = [
+const COMIC_CATEGORIES: { id: OpenLibraryCategory; label: string }[] = [
   { id: "all", label: "All Genres" },
-  { id: "superhero", label: "Superhero & Action", alGenre: "Action" },
-  { id: "scifi", label: "Sci-Fi & Cyberpunk", alGenre: "Sci-Fi" },
-  { id: "horror", label: "Horror & Supernatural", alGenre: "Horror" },
-  { id: "noir", label: "Noir & Mystery", alGenre: "Mystery" },
-  { id: "memoir", label: "Memoir & Drama", alGenre: "Drama" },
-];
-
-const MANGA_GENRES = [
-  "All",
-  "Action",
-  "Adventure",
-  "Drama",
-  "Fantasy",
-  "Horror",
-  "Mystery",
-  "Psychological",
-  "Romance",
-  "Sci-Fi",
-  "Slice of Life",
-  "Supernatural",
-  "Thriller",
+  { id: "superhero", label: "Superhero & Action" },
+  { id: "scifi", label: "Sci-Fi & Cyberpunk" },
+  { id: "horror", label: "Horror & Supernatural" },
+  { id: "noir", label: "Noir & Mystery" },
+  { id: "memoir", label: "Memoir & History" },
 ];
 
 function HomePageClient() {
@@ -92,21 +75,17 @@ function HomePageContent({
   const { state, mounted, getEntry, setStatus, loadStarterShelf } = useGNovel();
 
   const [scope, setScope] = useState<CatalogScope>(
-    urlScope && ["all", "comics", "manga", "curated"].includes(urlScope)
-      ? urlScope
-      : "all"
+    urlScope === "curated" ? "curated" : "all"
   );
   const [query, setQuery] = useState(urlQuery);
   const [comicCategory, setComicCategory] = useState<OpenLibraryCategory>("all");
-  const [mangaGenre, setMangaGenre] = useState<string>("All");
   const [curatedGenre, setCuratedGenre] = useState<string>("All");
-  const [mangaOrigin, setMangaOrigin] = useState<MangaOrigin>("all");
   const [sortBy, setSortBy] = useState<SortOption>("score");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [page, setPage] = useState(1);
 
   const [catalogItems, setCatalogItems] = useState<GraphicNovel[]>([]);
-  const [totalFound, setTotalFound] = useState<number>(71500);
+  const [totalFound, setTotalFound] = useState<number>(66000);
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState(false);
   const [logNovel, setLogNovel] = useState<GraphicNovel | null>(null);
@@ -139,7 +118,7 @@ function HomePageContent({
     return copy;
   }, [query, scope, curatedGenre, sortBy]);
 
-  // Live paginated Open Library + AniList catalog
+  // Live paginated Open Library catalog (Graphic Novels & Comics only)
   useEffect(() => {
     if (scope === "curated") {
       return;
@@ -153,41 +132,17 @@ function HomePageContent({
       setRemoteError(false);
 
       try {
-        const catMeta = COMIC_CATEGORIES.find((c) => c.id === comicCategory);
-
         if (trimmed.length >= 2) {
-          // Search across Open Library and/or AniList
-          const promises: Promise<GraphicNovel[]>[] = [];
+          const olResults = await searchOpenLibrary(
+            trimmed,
+            true,
+            controller.signal
+          );
 
-          if (scope === "all" || scope === "comics") {
-            promises.push(
-              searchOpenLibrary(trimmed, true, controller.signal).catch(() => [])
-            );
-          }
-          if (scope === "all" || scope === "manga") {
-            promises.push(
-              browseAniList({
-                query: trimmed,
-                genre: scope === "manga" ? mangaGenre : catMeta?.alGenre,
-                country: mangaOrigin === "all" ? undefined : mangaOrigin,
-                sort: sortBy,
-                page,
-                perPage: scope === "all" ? 24 : 48,
-                signal: controller.signal,
-              })
-                .then((r) => r.items)
-                .catch(() => [])
-            );
-          }
-
-          const settled = await Promise.all(promises);
-          const mergedRemote = settled.flat();
-
-          // Deduplicate against curated titles matching this search
           const seenTitles = new Set(
             curatedMatches.map((n) => n.title.toLowerCase().trim())
           );
-          const uniqueRemote = mergedRemote.filter((item) => {
+          const uniqueRemote = olResults.filter((item) => {
             const key = item.title.toLowerCase().trim();
             if (seenTitles.has(key)) return false;
             seenTitles.add(key);
@@ -197,7 +152,7 @@ function HomePageContent({
           const combined = [...curatedMatches, ...uniqueRemote];
           setCatalogItems(combined);
           setTotalFound(combined.length);
-        } else if (scope === "comics") {
+        } else {
           const res = await browseOpenLibraryCatalog({
             category: comicCategory,
             sort: sortBy,
@@ -205,51 +160,11 @@ function HomePageContent({
             perPage: 48,
             signal: controller.signal,
           });
-          setCatalogItems(res.items);
-          setTotalFound(res.totalFound);
-        } else if (scope === "manga") {
-          const res = await browseAniList({
-            genre: mangaGenre,
-            country: mangaOrigin === "all" ? undefined : mangaOrigin,
-            sort: sortBy,
-            page,
-            perPage: 48,
-            signal: controller.signal,
-          });
-          setCatalogItems(res.items);
-          setTotalFound(res.totalFound);
-        } else {
-          // scope === "all": 24 Western Comics/GNs + 24 Manga/Manhwa per page
-          const [olRes, alRes] = await Promise.allSettled([
-            browseOpenLibraryCatalog({
-              category: comicCategory,
-              sort: sortBy,
-              page,
-              perPage: 24,
-              signal: controller.signal,
-            }),
-            browseAniList({
-              genre: catMeta?.alGenre,
-              sort: sortBy,
-              page,
-              perPage: 24,
-              signal: controller.signal,
-            }),
-          ]);
-
-          const olItems =
-            olRes.status === "fulfilled" ? olRes.value.items : [];
-          const olTotal =
-            olRes.status === "fulfilled" ? olRes.value.totalFound : 0;
-          const alItems =
-            alRes.status === "fulfilled" ? alRes.value.items : [];
-          const alTotal =
-            alRes.status === "fulfilled" ? alRes.value.totalFound : 0;
 
           const basePool =
             page === 1 && comicCategory === "all"
-              ? [...curatedMatches.slice(0, 12), ...olItems, ...alItems]
-              : [...olItems, ...alItems];
+              ? [...curatedMatches, ...res.items]
+              : res.items;
 
           const seen = new Set<string>();
           const deduped: GraphicNovel[] = [];
@@ -261,18 +176,20 @@ function HomePageContent({
             }
           }
 
-          if (sortBy === "score") {
-            deduped.sort((a, b) => b.communityScore - a.communityScore);
-          } else if (sortBy === "popularity") {
-            deduped.sort(
-              (a, b) => (b.membersCount || 0) - (a.membersCount || 0)
-            );
-          } else if (sortBy === "newest") {
-            deduped.sort((a, b) => b.year - a.year);
+          if (page === 1 && comicCategory === "all") {
+            if (sortBy === "score") {
+              deduped.sort((a, b) => b.communityScore - a.communityScore);
+            } else if (sortBy === "popularity") {
+              deduped.sort(
+                (a, b) => (b.membersCount || 0) - (a.membersCount || 0)
+              );
+            } else if (sortBy === "newest") {
+              deduped.sort((a, b) => b.year - a.year);
+            }
           }
 
           setCatalogItems(deduped.slice(0, 48));
-          setTotalFound(olTotal + alTotal || deduped.length);
+          setTotalFound(res.totalFound || deduped.length);
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -287,7 +204,7 @@ function HomePageContent({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [scope, query, comicCategory, mangaGenre, mangaOrigin, sortBy, page, curatedMatches]);
+  }, [scope, query, comicCategory, sortBy, page, curatedMatches]);
 
   const displayedItems = scope === "curated" ? curatedMatches : catalogItems;
   const fallbackDisplay =
@@ -300,7 +217,6 @@ function HomePageContent({
       : Math.max(1, Math.min(1000, Math.ceil(totalFound / perPage)));
 
   const trackedCount = mounted ? Object.keys(state.library).length : 0;
-
   const isRemoteLoading = scope !== "curated" && loadingRemote;
   const isRemoteError = scope !== "curated" && remoteError;
 
@@ -321,13 +237,9 @@ function HomePageContent({
           <h1 className="text-base sm:text-lg font-bold text-white">
             {query.trim()
               ? `Search Results for "${query.trim()}"`
-              : scope === "comics"
-              ? "Comics & Graphic Novels Database"
-              : scope === "manga"
-              ? "Manga & Manhwa Database"
               : scope === "curated"
               ? "Curated Graphic Novel Essentials"
-              : "Top Graphic Novels, Comics & Manga"}
+              : "Top Graphic Novels & Comics"}
           </h1>
           <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#2E51A2]/25 border border-[#4C74D6]/40 px-2 py-0.5 text-[11px] font-medium text-[#8EB4FF] tabular-nums">
             <Globe className="h-3 w-3" />
@@ -338,6 +250,9 @@ function HomePageContent({
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          <Link href="/creator/" className="mal-link">
+            Writers &amp; Artists
+          </Link>
           {mounted && trackedCount === 0 ? (
             <button
               type="button"
@@ -358,10 +273,11 @@ function HomePageContent({
       {/* MAL Database Underline Scope Tabs */}
       <div className="flex items-end gap-1 overflow-x-auto border-b border-[#34549E] bg-[#181818] px-3 pt-2 text-xs">
         {[
-          { id: "all" as const, label: "All Catalog (71,000+)" },
-          { id: "comics" as const, label: "Western Comics & GNs (66,500+)" },
-          { id: "manga" as const, label: "Manga & Manhwa (5,000+)" },
-          { id: "curated" as const, label: `Curated Essentials (${CURATED_NOVELS.length})` },
+          { id: "all" as const, label: "All Graphic Novels & Comics (66,000+)" },
+          {
+            id: "curated" as const,
+            label: `Curated Essentials (${CURATED_NOVELS.length})`,
+          },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -391,7 +307,7 @@ function HomePageContent({
                 setQuery(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search any comic, graphic novel, manga, or creator..."
+              placeholder="Search graphic novels, comic runs, or creators..."
               className="h-8 pl-8 pr-8 rounded-[3px] border-[#333333] bg-[#101010] text-xs"
             />
             {query && (
@@ -410,22 +326,6 @@ function HomePageContent({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {scope === "manga" && (
-              <select
-                value={mangaOrigin}
-                onChange={(e) => {
-                  setMangaOrigin(e.target.value as MangaOrigin);
-                  setPage(1);
-                }}
-                aria-label="Filter origin"
-                className="h-8 rounded-[3px] border border-[#333333] bg-[#101010] px-2.5 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
-              >
-                <option value="all">Origin: All</option>
-                <option value="JP">Japan (Manga)</option>
-                <option value="KR">South Korea (Manhwa)</option>
-              </select>
-            )}
-
             <select
               value={sortBy}
               onChange={(e) => {
@@ -473,7 +373,7 @@ function HomePageContent({
 
         {/* Genre / Category Filter Strip */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[11px]">
-          {(scope === "all" || scope === "comics") &&
+          {scope === "all" &&
             COMIC_CATEGORIES.map((cat) => (
               <button
                 key={cat.id}
@@ -490,26 +390,6 @@ function HomePageContent({
                 )}
               >
                 {cat.label}
-              </button>
-            ))}
-
-          {scope === "manga" &&
-            MANGA_GENRES.map((genre) => (
-              <button
-                key={genre}
-                type="button"
-                onClick={() => {
-                  setMangaGenre(genre);
-                  setPage(1);
-                }}
-                className={cn(
-                  "shrink-0 px-2.5 py-1 rounded-[3px] border transition-colors",
-                  mangaGenre === genre
-                    ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
-                    : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
-                )}
-              >
-                {genre}
               </button>
             ))}
 
@@ -540,7 +420,7 @@ function HomePageContent({
             {isRemoteLoading ? (
               <span className="inline-flex items-center gap-1.5 text-[#8EB4FF]">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading live catalog page {page}...
+                Loading catalog page {page}...
               </span>
             ) : (
               <span className="tabular-nums">
@@ -609,6 +489,9 @@ function HomePageContent({
                     : undefined;
                   const href = getNovelHref(novel);
                   const displayRank = (page - 1) * perPage + idx + 1;
+                  const credits = Array.from(
+                    new Set([...novel.writers, ...novel.artists])
+                  );
 
                   return (
                     <tr
@@ -636,31 +519,17 @@ function HomePageContent({
                             )}
                           </Link>
                           <div className="min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Link
-                                href={href}
-                                onClick={() => cacheNovelSnapshot(novel)}
-                                className="font-bold text-sm mal-link"
-                              >
-                                {novel.title}
-                              </Link>
-                              {novel.sourceLabel && (
-                                <span className="rounded-[2px] border border-[#2F2F2F] bg-[#1C1C1C] px-1.5 py-0.2 text-[10px] text-[#8A8A8A]">
-                                  {novel.sourceLabel}
-                                </span>
-                              )}
-                            </div>
+                            <Link
+                              href={href}
+                              onClick={() => cacheNovelSnapshot(novel)}
+                              className="font-bold text-sm mal-link block truncate"
+                            >
+                              {novel.title}
+                            </Link>
                             <p className="text-[11px] text-[#9B9B9B] truncate">
                               {novel.format}
-                              {novel.volumes ? ` (${novel.volumes} vols)` : ""}
-                              {novel.issues
-                                ? ` · ${novel.issues} ${
-                                    novel.format === "Manga" || novel.format === "Manhwa"
-                                      ? "ch"
-                                      : "issues"
-                                  }`
-                                : ""}{" "}
-                              · {novel.writers.join(", ")}
+                              {novel.issues ? ` (${novel.issues} issues)` : ""} ·{" "}
+                              <CreatorLinks names={credits} max={3} />
                             </p>
                             <p className="text-[11px] text-[#7F7F7F] truncate tabular-nums">
                               {novel.publisher}
