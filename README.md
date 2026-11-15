@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GNovel
 
-## Getting Started
+A **Letterboxd + Backloggd** inspired graphic novel, comic, and manga cataloging platform — built with Next.js 16 (static export) so it runs seamlessly on **GitHub Pages** with zero backend required.
 
-First, run the development server:
+## Features
+
+- **Curated Canon + Live Open Library Search**: Browse 26 landmark graphic novels out of the box, or search Open Library's live catalog directly from your browser.
+- **Half-Star Ratings & 5 Shelf Statuses**: Track `Completed`, `Reading`, `Plan to Read`, `On Hold`, and `Dropped`, rate with `0.5★`–`5.0★` half-stars, favorite/like, and step through issue progress.
+- **Reading Diary**: Chronological reading journal grouped by month with edition format (`TPB`, `Hardcover / Omnibus`, `Single Issues`, `Digital`), re-read flags, and spoiler-protected reviews.
+- **Four Favorites & Reader Stats**: Pin your top 4 graphic novels and inspect your rating distribution histogram.
+- **Custom Ranked & Unranked Lists**: Build your own reading orders and top-10 lists alongside curated editorial collections.
+- **Portable JSON Backup**: Export and restore your entire library, diary, and lists anytime.
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Static Export & GitHub Pages
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+GNovel is configured with `output: "export"` and `trailingSlash: true` in `next.config.ts`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+To test the exact GitHub Pages subpath build locally:
 
-## Learn More
+```bash
+NEXT_PUBLIC_BASE_PATH=/gnovel npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds `out/` and deploys automatically to GitHub Pages.
