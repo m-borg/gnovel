@@ -44,6 +44,16 @@ export interface RelatedWorkItem {
   coverUrl: string;
 }
 
+export interface ConsolidatedEditionItem {
+  id: string;
+  olKey?: string;
+  title: string;
+  year?: number;
+  publisher?: string;
+  coverUrl?: string;
+  score?: number;
+}
+
 export interface GraphicNovel {
   id: string;
   olKey?: string;
@@ -67,6 +77,7 @@ export interface GraphicNovel {
   background?: string;
   issuesList?: IssueItem[];
   relatedEntries?: RelatedWorkItem[];
+  consolidatedEditions?: ConsolidatedEditionItem[];
   coverUrl: string;
   communityScore: number; // 0-10 MAL scale (e.g. 9.24)
   ratingsCount: number;

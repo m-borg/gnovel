@@ -30,6 +30,7 @@ import {
 import {
   browseOpenLibraryCatalog,
   cacheNovelSnapshot,
+  consolidateWorks,
   searchOpenLibrary,
   type OpenLibraryCategory,
 } from "@/lib/openlibrary";
@@ -139,17 +140,7 @@ function HomePageContent({
             controller.signal
           );
 
-          const seenTitles = new Set(
-            curatedMatches.map((n) => n.title.toLowerCase().trim())
-          );
-          const uniqueRemote = olResults.filter((item) => {
-            const key = item.title.toLowerCase().trim();
-            if (seenTitles.has(key)) return false;
-            seenTitles.add(key);
-            return true;
-          });
-
-          const combined = [...curatedMatches, ...uniqueRemote];
+          const combined = consolidateWorks([...curatedMatches, ...olResults]);
           setCatalogItems(combined);
           setTotalFound(combined.length);
         } else {
@@ -166,15 +157,7 @@ function HomePageContent({
               ? [...curatedMatches, ...res.items]
               : res.items;
 
-          const seen = new Set<string>();
-          const deduped: GraphicNovel[] = [];
-          for (const item of basePool) {
-            const key = item.title.toLowerCase().trim();
-            if (!seen.has(key)) {
-              seen.add(key);
-              deduped.push(item);
-            }
-          }
+          const deduped = consolidateWorks(basePool);
 
           if (page === 1 && comicCategory === "all") {
             if (sortBy === "score") {
@@ -519,13 +502,23 @@ function HomePageContent({
                             )}
                           </Link>
                           <div className="min-w-0 space-y-0.5">
-                            <Link
-                              href={href}
-                              onClick={() => cacheNovelSnapshot(novel)}
-                              className="font-bold text-sm mal-link block truncate"
-                            >
-                              {novel.title}
-                            </Link>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <Link
+                                href={href}
+                                onClick={() => cacheNovelSnapshot(novel)}
+                                className="font-bold text-sm mal-link truncate"
+                              >
+                                {novel.title}
+                              </Link>
+                              {(novel.consolidatedEditions?.length ?? 0) > 1 && (
+                                <span
+                                  title={`${novel.consolidatedEditions!.length} editions / volumes grouped into this entry`}
+                                  className="shrink-0 rounded-[2px] border border-[#2F2F2F] bg-[#1C1C1C] px-1.5 py-0.2 text-[10px] text-[#B8B8B8]"
+                                >
+                                  {novel.consolidatedEditions!.length} eds
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-[#9B9B9B] truncate">
                               {novel.format}
                               {novel.issues ? ` (${novel.issues} issues)` : ""} ·{" "}

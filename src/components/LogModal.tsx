@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "./StarRating";
 import { CURATED_NOVELS } from "@/lib/catalog";
-import { searchOpenLibrary } from "@/lib/openlibrary";
+import { consolidateWorks, searchOpenLibrary } from "@/lib/openlibrary";
 import { STATUS_OPTIONS } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
 import type { EditionFormat, GraphicNovel, ReadingStatus } from "@/lib/types";
@@ -112,12 +112,7 @@ function LogModalBody({
         )
       : CURATED_NOVELS.slice(0, 6);
 
-    const seen = new Set(localMatches.map((n) => n.id));
-    const merged = [...localMatches];
-    for (const r of remoteResults) {
-      if (!seen.has(r.id)) merged.push(r);
-    }
-    return merged.slice(0, 8);
+    return consolidateWorks([...localMatches, ...remoteResults]).slice(0, 8);
   }, [searchQuery, remoteResults]);
 
   const handleSelectNovel = (novel: GraphicNovel) => {

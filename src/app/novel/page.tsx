@@ -179,6 +179,9 @@ function NovelDetailClient() {
       ? enrichment.members
       : novel.membersCount || novel.ratingsCount * 6;
 
+  const groupedCount = novel.consolidatedEditions?.length ?? 0;
+  const totalEditionsCount = groupedCount + (enrichment?.editions?.length ?? 0);
+
   const tabs: { id: DetailTab; label: string }[] = [
     { id: "details", label: "Details" },
     {
@@ -187,9 +190,7 @@ function NovelDetailClient() {
     },
     {
       id: "editions",
-      label: enrichment?.editions?.length
-        ? `Editions (${enrichment.editions.length})`
-        : "Editions",
+      label: totalEditionsCount > 0 ? `Editions (${totalEditionsCount})` : "Editions",
     },
     { id: "reviews", label: `Reviews (${userLogs.length})` },
     { id: "recs", label: "Recommendations" },
@@ -861,43 +862,92 @@ function NovelDetailClient() {
 
             {/* TAB: EDITIONS */}
             {activeTab === "editions" && (
-              <div className="space-y-3">
-                <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
-                  Published Editions (via Open Library)
-                </h2>
-                {enrichment?.editions?.length ? (
-                  <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
-                    {enrichment.editions.map((ed) => (
-                      <div
-                        key={ed.key}
-                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
-                      >
-                        <div className="min-w-0">
-                          <a
-                            href={`https://openlibrary.org${ed.key}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-medium mal-link"
+              <div className="space-y-4">
+                {novel.consolidatedEditions && novel.consolidatedEditions.length > 0 && (
+                  <div className="space-y-2">
+                    <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+                      Collected Volumes & Editions Grouped in This Entry ({novel.consolidatedEditions.length})
+                    </h2>
+                    <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
+                      {novel.consolidatedEditions.map((ed) => {
+                        const olHref = ed.olKey
+                          ? `https://openlibrary.org${ed.olKey.startsWith("/") ? ed.olKey : `/works/${ed.olKey}`}`
+                          : null;
+                        return (
+                          <div
+                            key={ed.id}
+                            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
                           >
-                            {ed.title}
-                          </a>
-                          <p className="text-[11px] text-[#9B9B9B]">
-                            {ed.publishers.join(", ") || "Unknown publisher"}
-                            {ed.format ? ` · ${ed.format}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3 font-mono text-[11px] text-[#CCCCCC]">
-                          {ed.pages && <span>{ed.pages} pp.</span>}
-                          {ed.publishDate && <span>{ed.publishDate}</span>}
-                        </div>
-                      </div>
-                    ))}
+                            <div className="min-w-0">
+                              {olHref ? (
+                                <a
+                                  href={olHref}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-medium mal-link"
+                                >
+                                  {ed.title}
+                                </a>
+                              ) : (
+                                <p className="font-medium text-[#E0E0E0]">{ed.title}</p>
+                              )}
+                              <p className="text-[11px] text-[#9B9B9B]">
+                                {ed.publisher || "Unknown publisher"}
+                                {ed.year ? ` · ${ed.year}` : ""}
+                              </p>
+                            </div>
+                            {ed.score ? (
+                              <span className="text-[11px] font-bold text-[#F5B400] tabular-nums">
+                                ★ {ed.score.toFixed(2)}
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-[#9B9B9B]">
-                    No Open Library editions loaded for this entry.
-                  </p>
                 )}
+
+                <div className="space-y-2">
+                  <h2 className="border-b border-[#2E2E2E] pb-1 text-sm font-bold text-white">
+                    Published Editions (via Open Library)
+                  </h2>
+                  {enrichment?.editions?.length ? (
+                    <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
+                      {enrichment.editions.map((ed) => (
+                        <div
+                          key={ed.key}
+                          className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <a
+                              href={`https://openlibrary.org${ed.key}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium mal-link"
+                            >
+                              {ed.title}
+                            </a>
+                            <p className="text-[11px] text-[#9B9B9B]">
+                              {ed.publishers.join(", ") || "Unknown publisher"}
+                              {ed.format ? ` · ${ed.format}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 font-mono text-[11px] text-[#CCCCCC]">
+                            {ed.pages && <span>{ed.pages} pp.</span>}
+                            {ed.publishDate && <span>{ed.publishDate}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#9B9B9B]">
+                      {novel.consolidatedEditions?.length
+                        ? "No additional Open Library printings loaded."
+                        : "No Open Library editions loaded for this entry."}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

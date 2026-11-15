@@ -85,6 +85,201 @@ export function getCreatorHref(name: string): string {
   return `/creator/?name=${encodeURIComponent(name)}`;
 }
 
+function normalizeWords(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function extractCanonicalSeriesTitle(
+  title: string,
+  writers: string[] = [],
+  artists: string[] = []
+): string {
+  let clean = title
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .trim();
+
+  // Strip trailing edition, volume, book, compendium, omnibus, hardcover suffixes
+  const trailingPatterns = [
+    /[,:\-–—\s]+(?:the\s+)?(?:complete|absolute|deluxe|ultimate|definitive|collector'?s|annotated|anniversary|illustrated|integral|int[eé]grale|library|archive)\s*(?:edition|omnibus|compendium|collection|hardcover|paperback|tpb|box\s*set).*$/i,
+    /[,:\-–—\s]+(?:tpb|omnibus|compendium|hardcover|paperback|deluxe\s*edition|absolute\s*edition).*$/i,
+    /[,:\-–—\s]+(?:vol(?:ume)?s?\.?|book|bk\.?|part|pt\.?|tome|band|issues?|nos?\.?|#)\s*(?:\d+(?:\s*[-–]\s*\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|[ivxlcdm]+)\b.*$/i,
+    /[\s:,-]+(?:i|ii|iii|iv|v|vi|vii|viii|ix|x|\d+)$/i,
+  ];
+
+  let prev = "";
+  while (prev !== clean) {
+    prev = clean;
+    for (const pat of trailingPatterns) {
+      clean = clean.replace(pat, "").trim();
+    }
+    clean = clean.replace(/[,:\-–—]+$/g, "").trim();
+  }
+
+  clean = clean.replace(
+    /^(?:the\s+)?(?:complete|indispensable|essential|authoritative|best\s+of|absolute|deluxe|ultimate|omnibus)\s+/i,
+    ""
+  );
+  clean = clean.replace(/^(?:the|a|an)\s+/i, "").trim();
+
+  const normalized = normalizeWords(clean)
+    .replace(/\bseason eight\b/g, "season 8")
+    .replace(/\bseason one\b/g, "season 1");
+  const creatorsJoined = [...writers, ...artists].join(" ").toLowerCase();
+
+  // Known Open Library split-title aliases scoped to their exact creators
+  if (
+    (creatorsJoined.includes("vaughan") || creatorsJoined.includes("pia guerra") || creatorsJoined.includes("marzan")) &&
+    (normalized === "y" || normalized === "last man" || normalized.startsWith("y last man") || normalized.startsWith("y the last man"))
+  ) {
+    return "y last man";
+  }
+  if (
+    creatorsJoined.includes("gaiman") &&
+    ["sandman", "season of mists", "preludes and nocturnes", "dolls house", "brief lives", "fables and reflections", "game of you", "kindly ones", "wake", "overture", "dream country", "worlds end"].includes(normalized)
+  ) {
+    return "sandman";
+  }
+
+  return normalized || normalizeWords(title);
+}
+
+function getSeriesPrefixCandidate(title: string): string | null {
+  const idx = title.search(/[:\-–—]/);
+  if (idx <= 1) return null;
+  const prefix = title.slice(0, idx).trim();
+  const norm = normalizeWords(prefix.replace(/^(?:the|a|an)\s+/i, ""));
+  return norm.length >= 3 ? norm : null;
+}
+
+function creatorsOverlap(a: GraphicNovel, b: GraphicNovel): boolean {
+  const setA = new Set(
+    [...a.writers, ...a.artists].map((x) => normalizeWords(x))
+  );
+  for (const person of [...b.writers, ...b.artists]) {
+    if (setA.has(normalizeWords(person))) return true;
+  }
+  return false;
+}
+
+function pickPrimaryNovel(a: GraphicNovel, b: GraphicNovel): [GraphicNovel, GraphicNovel] {
+  if (a.isCurated && !b.isCurated) return [a, b];
+  if (b.isCurated && !a.isCurated) return [b, a];
+
+  const scoreA =
+    (a.coverUrl ? 100 : 0) +
+    Math.min(a.title.length * -1, 0) +
+    (a.membersCount || 0) * 0.01 +
+    (a.ratingsCount || 0);
+  const scoreB =
+    (b.coverUrl ? 100 : 0) +
+    Math.min(b.title.length * -1, 0) +
+    (b.membersCount || 0) * 0.01 +
+    (b.ratingsCount || 0);
+
+  return scoreA >= scoreB ? [a, b] : [b, a];
+}
+
+/**
+ * Consolidates multiple editions, volumes, compendiums, and hardcover reprints
+ * of the same series into a single canonical entry with `consolidatedEditions` attached.
+ */
+export function consolidateWorks(items: GraphicNovel[]): GraphicNovel[] {
+  const groups: {
+    key: string;
+    primary: GraphicNovel;
+    editions: GraphicNovel[];
+  }[] = [];
+
+  for (const item of items) {
+    const key = extractCanonicalSeriesTitle(item.title, item.writers, item.artists);
+    const prefix = getSeriesPrefixCandidate(item.title);
+
+    let match = groups.find((g) => {
+      if (g.key === key && (creatorsOverlap(g.primary, item) || g.primary.title.toLowerCase() === item.title.toLowerCase() || key.length >= 6)) {
+        return true;
+      }
+      if (prefix && (g.key === prefix || extractCanonicalSeriesTitle(g.primary.title, g.primary.writers, g.primary.artists) === prefix) && creatorsOverlap(g.primary, item)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!match && key.includes(" ")) {
+      // Also check if an existing group's prefix matches this item's key (e.g. "Hellboy: Seed of Destruction" matched before "Hellboy")
+      match = groups.find((g) => {
+        const gPrefix = getSeriesPrefixCandidate(g.primary.title);
+        return Boolean(gPrefix && gPrefix === key && creatorsOverlap(g.primary, item));
+      });
+    }
+
+    if (!match) {
+      groups.push({
+        key,
+        primary: item,
+        editions: [item],
+      });
+    } else {
+      const [winner, runnerUp] = pickPrimaryNovel(match.primary, item);
+      if (winner === item) {
+        match.key = extractCanonicalSeriesTitle(winner.title, winner.writers, winner.artists);
+      }
+      match.primary = winner;
+      if (!match.editions.some((e) => e.id === runnerUp.id && e.title === runnerUp.title)) {
+        match.editions.push(item);
+      }
+    }
+  }
+
+  return groups.map((g) => {
+    if (g.editions.length <= 1) {
+      return g.primary;
+    }
+
+    const seenEdKeys = new Set<string>();
+    const rawEditions: NonNullable<GraphicNovel["consolidatedEditions"]> = [];
+    for (const ed of g.editions) {
+      if (ed.consolidatedEditions?.length) {
+        rawEditions.push(...ed.consolidatedEditions);
+      } else {
+        rawEditions.push({
+          id: ed.id,
+          olKey: ed.olKey,
+          title: ed.title,
+          year: ed.year || undefined,
+          publisher: ed.publisher,
+          coverUrl: ed.coverUrl,
+          score: ed.communityScore,
+        });
+      }
+    }
+
+    const consolidatedEditions = rawEditions.filter((ed) => {
+      const k = `${ed.olKey || ed.id}::${ed.title.toLowerCase()}`;
+      if (seenEdKeys.has(k)) return false;
+      seenEdKeys.add(k);
+      return true;
+    });
+
+    const merged: GraphicNovel = {
+      ...g.primary,
+      membersCount: Math.max(
+        g.primary.membersCount || 0,
+        ...g.editions.map((e) => e.membersCount || 0)
+      ),
+      consolidatedEditions,
+    };
+    cacheNovelSnapshot(merged);
+    return merged;
+  });
+}
+
 export function extractOlId(key: string): string {
   return key.replace("/works/", "").replace(/[^A-Za-z0-9_-]/g, "");
 }
@@ -208,19 +403,22 @@ export async function browseOpenLibraryCatalog({
       ? "new"
       : "rating";
 
+  const rawLimit = Math.min(100, perPage * 2);
   const q = `${categoryClauses[category]} ${exclusions}`;
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
-  )}&sort=${sortParam}&limit=${perPage}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+  )}&sort=${sortParam}&limit=${rawLimit}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Open Library browse failed");
   const data = await res.json();
   const docs: OLSearchDoc[] = data.docs || [];
 
-  const items = docs
+  const rawItems = docs
     .filter((d) => d.key && d.title && d.cover_i && !isMangaLike(d.subject, d.title))
     .map((doc, idx) => mapOlDocToNovel(doc, (page - 1) * perPage + idx + 1));
+
+  const items = consolidateWorks(rawItems).slice(0, perPage);
 
   return {
     items,
@@ -244,7 +442,7 @@ export async function searchOpenLibrary(
 
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
-  )}&limit=28&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+  )}&limit=45&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Open Library search failed");
@@ -255,10 +453,11 @@ export async function searchOpenLibrary(
     return searchOpenLibrary(trimmed, false, signal);
   }
 
-  return docs
+  const rawItems = docs
     .filter((d) => d.key && d.title && d.cover_i && !isMangaLike(d.subject, d.title))
-    .slice(0, 24)
     .map((doc) => mapOlDocToNovel(doc));
+
+  return consolidateWorks(rawItems).slice(0, 24);
 }
 
 interface OLAuthorSearchDoc {
@@ -424,30 +623,27 @@ export async function fetchCreatorWorks({
       ? "new"
       : "rating";
 
+  const rawLimit = Math.min(100, perPage * 2);
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
-  )}&sort=${sortParam}&limit=${perPage}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+  )}&sort=${sortParam}&limit=${rawLimit}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Failed to fetch creator works");
   const data = await res.json();
   const docs: OLSearchDoc[] = data.docs || [];
 
-  const items = docs
+  const rawItems = docs
     .filter((d) => d.key && d.title && !isMangaLike(d.subject, d.title))
     .map((doc, idx) =>
-      mapOlDocToNovel(
-        {
-          ...doc,
-          cover_i: doc.cover_i,
-        },
-        (page - 1) * perPage + idx + 1
-      )
+      mapOlDocToNovel(doc, (page - 1) * perPage + idx + 1)
     )
     .map((n) => ({
       ...n,
       coverUrl: n.coverUrl.includes("undefined") ? "" : n.coverUrl,
     }));
+
+  const items = consolidateWorks(rawItems).slice(0, perPage);
 
   return {
     items,

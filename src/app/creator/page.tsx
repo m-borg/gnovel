@@ -24,6 +24,7 @@ import { CreatorLinks } from "@/components/CreatorLinks";
 import { CURATED_NOVELS, getCreatorDirectory } from "@/lib/catalog";
 import {
   cacheNovelSnapshot,
+  consolidateWorks,
   fetchCreatorProfile,
   fetchCreatorWorks,
   getCreatorHref,
@@ -364,16 +365,7 @@ function CreatorProfileView({ creatorName }: { creatorName: string }) {
 
   const combinedWorks = useMemo(() => {
     const base = page === 1 ? [...curatedWorks, ...works] : [...works];
-    const seen = new Set<string>();
-    const deduped: GraphicNovel[] = [];
-    for (const item of base) {
-      const key = item.title.toLowerCase().trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        deduped.push(item);
-      }
-    }
-    return deduped;
+    return consolidateWorks(base);
   }, [page, curatedWorks, works]);
 
   const userCreatorStats = useMemo(() => {
@@ -765,6 +757,14 @@ function CreatorProfileView({ creatorName }: { creatorName: string }) {
                                     <span className="rounded-[2px] border border-[#2F2F2F] bg-[#1C1C1C] px-1.5 py-0.2 text-[10px] text-[#9B9B9B]">
                                       {roleText}
                                     </span>
+                                    {(work.consolidatedEditions?.length ?? 0) > 1 && (
+                                      <span
+                                        title={`${work.consolidatedEditions!.length} collected editions / volumes merged into this series entry`}
+                                        className="rounded-[2px] border border-[#2E51A2]/50 bg-[#2E51A2]/15 px-1.5 py-0.2 text-[10px] text-[#9EB7F5]"
+                                      >
+                                        {work.consolidatedEditions!.length} vols/editions grouped
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-[#9B9B9B] truncate">
                                     {work.format} · {work.publisher}
