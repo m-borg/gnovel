@@ -85,7 +85,7 @@ function HomePageContent({
   const [page, setPage] = useState(1);
 
   const [catalogItems, setCatalogItems] = useState<GraphicNovel[]>([]);
-  const [totalFound, setTotalFound] = useState<number>(66000);
+  const [totalFound, setTotalFound] = useState<number>(50700);
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState(false);
   const [logNovel, setLogNovel] = useState<GraphicNovel | null>(null);
@@ -273,7 +273,7 @@ function HomePageContent({
       {/* MAL Database Underline Scope Tabs */}
       <div className="flex items-end gap-1 overflow-x-auto border-b border-[#34549E] bg-[#181818] px-3 pt-2 text-xs">
         {[
-          { id: "all" as const, label: "All Graphic Novels & Comics (66,000+)" },
+          { id: "all" as const, label: "All Graphic Novels & Comics (50,000+)" },
           {
             id: "curated" as const,
             label: `Curated Essentials (${CURATED_NOVELS.length})`,

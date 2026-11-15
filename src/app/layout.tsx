@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GNovel — Graphic Novel Database, Shelf & Diary",
+  title: "GNovel — Graphic Novel & Comics Database, Shelf & Diary",
   description:
-    "MyAnimeList-inspired database, 1–10 scoring, reading diary, and custom shelves for graphic novels, comics, and manga.",
+    "MyAnimeList-inspired database, 1–10 scoring, reading diary, creator profiles, and custom shelves for graphic novels and western comics.",
 };
 
 export default function RootLayout({

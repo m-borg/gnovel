@@ -190,7 +190,7 @@ export async function browseOpenLibraryCatalog({
   signal?: AbortSignal;
 }): Promise<CatalogBrowseResult> {
   const exclusions =
-    'NOT subject:"Manga" NOT subject:"Shonen" NOT subject:"Seinen" NOT subject:"Shojo" NOT subject:"Manhwa" NOT subject:"Drama" NOT subject:"Plays" NOT subject:"Classic Literature" NOT subject:"Study guides" NOT subject:"Criticism and interpretation" NOT subject:"Greg Heffley (Fictitious character)"';
+    'NOT subject:"Manga" NOT subject:"Shonen" NOT subject:"Seinen" NOT subject:"Shojo" NOT subject:"Manhwa" NOT subject:"Manhua" NOT publisher:"Viz Media" NOT publisher:"Kodansha" NOT publisher:"Shueisha" NOT subject:"Drama" NOT subject:"Plays" NOT subject:"Classic Literature" NOT subject:"Study guides" NOT subject:"Criticism and interpretation" NOT author:"Jeff Kinney" NOT subject:"Wimpy Kid" NOT subject:"Juvenile literature"';
 
   const categoryClauses: Record<OpenLibraryCategory, string> = {
     all: '(subject:"Graphic novels" OR subject:"Comic books, strips, etc.")',
@@ -239,8 +239,8 @@ export async function searchOpenLibrary(
   if (!trimmed) return [];
 
   const q = comicsOnly
-    ? `${trimmed} (subject:"Comic books, strips, etc." OR subject:"Graphic novels") NOT subject:"Manga" NOT subject:"Manhwa"`
-    : `${trimmed} NOT subject:"Manga" NOT subject:"Manhwa"`;
+    ? `${trimmed} (subject:"Comic books, strips, etc." OR subject:"Graphic novels") NOT subject:"Manga" NOT subject:"Manhwa" NOT publisher:"Viz Media" NOT publisher:"Kodansha" NOT publisher:"Shueisha"`
+    : `${trimmed} NOT subject:"Manga" NOT subject:"Manhwa" NOT publisher:"Viz Media" NOT publisher:"Kodansha" NOT publisher:"Shueisha"`;
 
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
