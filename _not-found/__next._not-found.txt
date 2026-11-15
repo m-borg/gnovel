@@ -1,5 +1,5 @@
 1:"$Sreact.fragment"
-2:I[39756,["/gnovel/_next/static/chunks/0jfdads5q6qhy.js","/gnovel/_next/static/chunks/0fvzlsawj-acb.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
-3:I[37457,["/gnovel/_next/static/chunks/0jfdads5q6qhy.js","/gnovel/_next/static/chunks/0fvzlsawj-acb.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
+2:I[39756,["/gnovel/_next/static/chunks/0sx373d7u41__.js","/gnovel/_next/static/chunks/0mdkces5d6848.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
+3:I[37457,["/gnovel/_next/static/chunks/0sx373d7u41__.js","/gnovel/_next/static/chunks/0mdkces5d6848.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"default"]
 4:[]
-0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"qsj_rYqp3RDi52-eRDo0Q"}
+0:{"rsc":["$","$1","c",{"children":[null,["$","$L2",null,{"parallelRouterKey":"children","template":["$","$L3",null,{}]}]]}],"isPartial":false,"staleTime":300,"varyParams":"$W4","buildId":"bSG5jWUavya3eOF4roHiq"}

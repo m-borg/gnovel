@@ -1,9 +1,9 @@
 1:"$Sreact.fragment"
-2:I[47257,["/gnovel/_next/static/chunks/0jfdads5q6qhy.js","/gnovel/_next/static/chunks/0fvzlsawj-acb.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"ClientPageRoot"]
-3:I[91885,["/gnovel/_next/static/chunks/0jfdads5q6qhy.js","/gnovel/_next/static/chunks/0fvzlsawj-acb.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js","/gnovel/_next/static/chunks/0_.st2ia3uc5j.js"],"default"]
-6:I[97367,["/gnovel/_next/static/chunks/0jfdads5q6qhy.js","/gnovel/_next/static/chunks/0fvzlsawj-acb.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
+2:I[47257,["/gnovel/_next/static/chunks/0sx373d7u41__.js","/gnovel/_next/static/chunks/0mdkces5d6848.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"ClientPageRoot"]
+3:I[91885,["/gnovel/_next/static/chunks/0sx373d7u41__.js","/gnovel/_next/static/chunks/0mdkces5d6848.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js","/gnovel/_next/static/chunks/0_.st2ia3uc5j.js"],"default"]
+6:I[97367,["/gnovel/_next/static/chunks/0sx373d7u41__.js","/gnovel/_next/static/chunks/0mdkces5d6848.js","/gnovel/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
 7:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/gnovel/_next/static/chunks/0_.st2ia3uc5j.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"qsj_rYqp3RDi52-eRDo0Q"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","script","script-0",{"src":"/gnovel/_next/static/chunks/0_.st2ia3uc5j.js","async":true}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"bSG5jWUavya3eOF4roHiq"}
 4:{}
 5:"$0:rsc:props:children:0:props:serverProvidedParams:params"
 8:null

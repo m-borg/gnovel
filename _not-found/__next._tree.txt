@@ -1,2 +1,2 @@
-:HL["/gnovel/_next/static/chunks/0nuqx4iuun-v6.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"qsj_rYqp3RDi52-eRDo0Q"}
+:HL["/gnovel/_next/static/chunks/08p~g51tvz-gg.css","style"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"/_not-found","param":null,"prefetchHints":0,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}}}},"staleTime":300,"buildId":"bSG5jWUavya3eOF4roHiq"}
