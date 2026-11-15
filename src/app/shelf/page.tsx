@@ -178,39 +178,39 @@ export default function ShelfPage() {
           </div>
 
           {/* Stats & Score Distribution (1-10) */}
-          <div className="lg:col-span-7 border border-[#2C2C2C] bg-[#161616] p-3 space-y-3">
+          <div className="lg:col-span-7 rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-3 space-y-3">
             <h2 className="border-b border-[#252525] pb-1.5 text-xs font-bold text-white">
               Graphic Novel Stats
             </h2>
 
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-              <div className="border border-[#262626] bg-[#121212] p-2">
+              <div className="rounded-[3px] border border-[#262626] bg-[#121212] p-2">
                 <span className="text-[10px] text-[#9B9B9B] block">Total Entries</span>
-                <span className="font-mono text-base font-bold text-white">
+                <span className="text-base font-bold text-white tabular-nums">
                   {stats.total}
                 </span>
               </div>
-              <div className="border border-[#262626] bg-[#121212] p-2">
+              <div className="rounded-[3px] border border-[#262626] bg-[#121212] p-2">
                 <span className="text-[10px] text-[#9B9B9B] block">Reading</span>
-                <span className="font-mono text-base font-bold text-[#4ADE80]">
+                <span className="text-base font-bold text-[#4ADE80] tabular-nums">
                   {stats.reading}
                 </span>
               </div>
-              <div className="border border-[#262626] bg-[#121212] p-2">
+              <div className="rounded-[3px] border border-[#262626] bg-[#121212] p-2">
                 <span className="text-[10px] text-[#9B9B9B] block">Completed</span>
-                <span className="font-mono text-base font-bold text-[#8EB4FF]">
+                <span className="text-base font-bold text-[#8EB4FF] tabular-nums">
                   {stats.completed}
                 </span>
               </div>
-              <div className="border border-[#262626] bg-[#121212] p-2">
+              <div className="rounded-[3px] border border-[#262626] bg-[#121212] p-2">
                 <span className="text-[10px] text-[#9B9B9B] block">Plan to Read</span>
-                <span className="font-mono text-base font-bold text-[#CCCCCC]">
+                <span className="text-base font-bold text-[#CCCCCC] tabular-nums">
                   {stats.plan}
                 </span>
               </div>
-              <div className="border border-[#262626] bg-[#121212] p-2 col-span-2 sm:col-span-1">
+              <div className="rounded-[3px] border border-[#262626] bg-[#121212] p-2 col-span-2 sm:col-span-1">
                 <span className="text-[10px] text-[#9B9B9B] block">Issues Read</span>
-                <span className="font-mono text-base font-bold text-[#FACC15]">
+                <span className="text-base font-bold text-[#FACC15] tabular-nums">
                   {stats.issuesRead}
                 </span>
               </div>
@@ -256,7 +256,7 @@ export default function ShelfPage() {
               type="button"
               onClick={() => setFilter("all")}
               className={cn(
-                "shrink-0 px-3 py-1 rounded-[2px] border",
+                "shrink-0 px-3 py-1 rounded-[3px] border",
                 filter === "all"
                   ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
                   : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
@@ -273,7 +273,7 @@ export default function ShelfPage() {
                   type="button"
                   onClick={() => setFilter(opt.value)}
                   className={cn(
-                    "shrink-0 px-3 py-1 rounded-[2px] border",
+                    "shrink-0 px-3 py-1 rounded-[3px] border",
                     filter === opt.value
                       ? opt.badgeClass + " font-semibold"
                       : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
@@ -288,7 +288,7 @@ export default function ShelfPage() {
               type="button"
               onClick={() => setFilter("favorites")}
               className={cn(
-                "shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-[2px] border",
+                "shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-[3px] border",
                 filter === "favorites"
                   ? "bg-[#FB7185]/20 border-[#FB7185]/40 text-[#FB7185] font-semibold"
                   : "bg-[#1A1A1A] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
@@ -304,7 +304,7 @@ export default function ShelfPage() {
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as ShelfSort)}
               aria-label="Sort shelf"
-              className="h-7 rounded-[2px] border border-[#333333] bg-[#1A1A1A] px-2 text-xs text-white"
+              className="h-7 rounded-[3px] border border-[#333333] bg-[#1A1A1A] px-2 text-xs text-white"
             >
               <option value="updated">Sort: Recently Updated</option>
               <option value="rating">Sort: Your Score</option>
@@ -312,12 +312,12 @@ export default function ShelfPage() {
               <option value="title">Sort: Title A–Z</option>
             </select>
 
-            <div className="inline-flex border border-[#333333] bg-[#1A1A1A] p-0.5 rounded-[2px]">
+            <div className="inline-flex border border-[#333333] bg-[#1A1A1A] p-0.5 rounded-[3px]">
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
                 className={cn(
-                  "p-1 rounded-[1px]",
+                  "p-1 rounded-[2px]",
                   viewMode === "table" ? "bg-[#2E51A2] text-white" : "text-[#9B9B9B]"
                 )}
                 aria-label="MAL Table View"
@@ -328,7 +328,7 @@ export default function ShelfPage() {
                 type="button"
                 onClick={() => setViewMode("grid")}
                 className={cn(
-                  "p-1 rounded-[1px]",
+                  "p-1 rounded-[2px]",
                   viewMode === "grid" ? "bg-[#2E51A2] text-white" : "text-[#9B9B9B]"
                 )}
                 aria-label="Grid View"

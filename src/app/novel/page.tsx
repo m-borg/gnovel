@@ -19,6 +19,7 @@ import { NovelCard, getNovelHref } from "@/components/NovelCard";
 import { StarRating } from "@/components/StarRating";
 import { LogModal } from "@/components/LogModal";
 import { CURATED_NOVELS, getCuratedNovelById } from "@/lib/catalog";
+import { fetchAniListById } from "@/lib/anilist";
 import {
   fetchOpenLibraryEnrichment,
   fetchOpenLibraryWork,
@@ -39,6 +40,7 @@ function NovelDetailClient() {
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id");
   const olParam = searchParams.get("ol");
+  const alParam = searchParams.get("al");
 
   const {
     state,
@@ -71,6 +73,20 @@ function NovelDetailClient() {
           state.library[idParam]?.novel ||
           getCachedNovel(idParam) ||
           null;
+      } else if (alParam) {
+        const alNum = parseInt(alParam, 10);
+        const normalizedId = `al-${alParam}`;
+        const cached =
+          state.library[normalizedId]?.novel || getCachedNovel(normalizedId);
+        if (cached && active) {
+          setNovel(cached);
+          setLoading(false);
+        }
+        if (!Number.isNaN(alNum)) {
+          resolved = await fetchAniListById(alNum, cached);
+        } else {
+          resolved = cached || null;
+        }
       } else if (olParam) {
         const normalizedId = `ol-${olParam}`;
         const curatedByOl = CURATED_NOVELS.find((n) => n.olKey === olParam);
@@ -104,7 +120,7 @@ function NovelDetailClient() {
     return () => {
       active = false;
     };
-  }, [idParam, olParam, state.library]);
+  }, [idParam, olParam, alParam, state.library]);
 
   const userLogs = useMemo(() => {
     if (!novel) return [];
@@ -230,7 +246,7 @@ function NovelDetailClient() {
           {/* LEFT SIDEBAR */}
           <aside className="border-b md:border-b-0 md:border-r border-[#2A2A2A] p-3 space-y-4 text-xs">
             {/* Cover */}
-            <div className="mx-auto max-w-[220px] md:max-w-none aspect-[2/3] overflow-hidden border border-[#333333] bg-[#1A1A1A]">
+            <div className="mx-auto max-w-[220px] md:max-w-none aspect-[2/3] overflow-hidden rounded-[3px] border border-[#303030] bg-[#1A1A1A]">
               {novel.coverUrl ? (
                 <img
                   src={novel.coverUrl}
@@ -276,16 +292,26 @@ function NovelDetailClient() {
                   <dt className="inline text-[#9B9B9B]">Type: </dt>
                   <dd className="inline text-[#8EB4FF]">{novel.format}</dd>
                 </div>
+                {novel.volumes && (
+                  <div>
+                    <dt className="inline text-[#9B9B9B]">Volumes: </dt>
+                    <dd className="inline text-[#E5E5E5] tabular-nums">{novel.volumes}</dd>
+                  </div>
+                )}
                 {novel.issues && (
                   <div>
-                    <dt className="inline text-[#9B9B9B]">Issues: </dt>
-                    <dd className="inline text-[#E5E5E5] font-mono">{novel.issues}</dd>
+                    <dt className="inline text-[#9B9B9B]">
+                      {novel.format === "Manga" || novel.format === "Manhwa"
+                        ? "Chapters: "
+                        : "Issues: "}
+                    </dt>
+                    <dd className="inline text-[#E5E5E5] tabular-nums">{novel.issues}</dd>
                   </div>
                 )}
                 {novel.pages && (
                   <div>
                     <dt className="inline text-[#9B9B9B]">Pages: </dt>
-                    <dd className="inline text-[#E5E5E5] font-mono">{novel.pages}</dd>
+                    <dd className="inline text-[#E5E5E5] tabular-nums">{novel.pages}</dd>
                   </div>
                 )}
                 <div>
@@ -327,7 +353,7 @@ function NovelDetailClient() {
               <dl className="space-y-1.5 text-[11px]">
                 <div>
                   <dt className="inline text-[#9B9B9B]">Score: </dt>
-                  <dd className="inline font-mono font-bold text-white">
+                  <dd className="inline font-bold text-white tabular-nums">
                     {displayScore}
                   </dd>
                   <span className="text-[#9B9B9B]">
@@ -338,25 +364,25 @@ function NovelDetailClient() {
                 {novel.ranked && (
                   <div>
                     <dt className="inline text-[#9B9B9B]">Ranked: </dt>
-                    <dd className="inline font-mono text-white">#{novel.ranked}</dd>
+                    <dd className="inline text-white tabular-nums">#{novel.ranked}</dd>
                   </div>
                 )}
                 {novel.popularity && (
                   <div>
                     <dt className="inline text-[#9B9B9B]">Popularity: </dt>
-                    <dd className="inline font-mono text-white">#{novel.popularity}</dd>
+                    <dd className="inline text-white tabular-nums">#{novel.popularity}</dd>
                   </div>
                 )}
                 <div>
                   <dt className="inline text-[#9B9B9B]">Members: </dt>
-                  <dd className="inline font-mono text-white">
+                  <dd className="inline text-white tabular-nums">
                     {displayMembers.toLocaleString()}
                   </dd>
                 </div>
                 {enrichment?.wantToRead !== undefined && (
                   <div>
                     <dt className="inline text-[#9B9B9B]">Open Library Shelves: </dt>
-                    <dd className="inline font-mono text-[#CCCCCC]">
+                    <dd className="inline text-[#CCCCCC] tabular-nums">
                       {enrichment.alreadyRead} read · {enrichment.wantToRead} plan
                     </dd>
                   </div>
@@ -364,35 +390,48 @@ function NovelDetailClient() {
               </dl>
             </div>
 
-            {novel.olKey && (
-              <div className="pt-2 border-t border-[#2A2A2A] text-[11px]">
-                <a
-                  href={`https://openlibrary.org/works/${novel.olKey}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 mal-link"
-                >
-                  Open Library Record
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+            {(novel.olKey || novel.anilistId) && (
+              <div className="pt-2 border-t border-[#2A2A2A] text-[11px] space-y-1">
+                {novel.olKey && (
+                  <a
+                    href={`https://openlibrary.org/works/${novel.olKey}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 mal-link"
+                  >
+                    Open Library Record
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                {novel.anilistId && (
+                  <a
+                    href={`https://anilist.co/manga/${novel.anilistId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 mal-link"
+                  >
+                    AniList Manga Record
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
               </div>
             )}
           </aside>
 
           {/* RIGHT MAIN COLUMN */}
           <div className="p-3 sm:p-4 space-y-4 min-w-0">
-            {/* MAL Sub-Nav Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto border-b border-[#2E2E2E] pb-1.5 text-xs">
+            {/* MAL Sub-Nav Underline Tabs */}
+            <div className="flex items-end gap-0.5 overflow-x-auto border-b border-[#34549E] text-xs">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "shrink-0 px-2.5 py-1 rounded-[2px] transition-colors",
+                    "shrink-0 px-2.5 py-1 rounded-t-[3px] transition-colors",
                     activeTab === tab.id
-                      ? "bg-[#2E51A2] text-white font-semibold"
-                      : "text-[#8EB4FF] hover:bg-[#1E1E1E]"
+                      ? "bg-[#E2E8F4] text-[#141414] font-bold"
+                      : "text-[#8EB4FF] hover:text-white hover:bg-[#1E1E1E]"
                   )}
                 >
                   {tab.label}
@@ -407,124 +446,145 @@ function NovelDetailClient() {
               </Link>
               <span>&gt;</span>
               <Link href="/" className="mal-link">
-                Graphic Novels
+                {novel.format === "Manga" || novel.format === "Manhwa"
+                  ? "Manga & Graphic Novels"
+                  : "Graphic Novels"}
               </Link>
               <span>&gt;</span>
               <span className="text-[#E5E5E5]">{novel.title}</span>
             </div>
 
             {/* Iconic MAL Score & Inline Action Box */}
-            <div className="border border-[#2D2D2D] bg-[#1A1A1A] p-3 space-y-3">
-              <div className="flex flex-wrap items-center gap-5">
-                {/* Blue SCORE block */}
-                <div className="flex flex-col items-center pr-5 border-r border-[#2E2E2E]">
-                  <span className="w-full text-center bg-[#2E51A2] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                    Score
-                  </span>
-                  <span className="mt-1 font-mono text-2xl font-bold text-white leading-none">
-                    {displayScore}
-                  </span>
-                  <span className="mt-1 text-[10px] text-[#9B9B9B]">
-                    {displayRatingsCount.toLocaleString()} users
-                  </span>
-                </div>
-
-                {/* Ranked / Popularity / Members */}
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-                    {novel.ranked && (
-                      <span>
-                        <span className="text-[#9B9B9B]">Ranked </span>
-                        <strong className="font-mono text-white">#{novel.ranked}</strong>
-                      </span>
-                    )}
-                    {novel.popularity && (
-                      <span>
-                        <span className="text-[#9B9B9B]">Popularity </span>
-                        <strong className="font-mono text-white">
-                          #{novel.popularity}
-                        </strong>
-                      </span>
-                    )}
-                    <span>
-                      <span className="text-[#9B9B9B]">Members </span>
-                      <strong className="font-mono text-white">
-                        {displayMembers.toLocaleString()}
-                      </strong>
+            <div className="space-y-1.5">
+              <div className="rounded-[4px] border border-[#2C2C2C] bg-[#1C1C1C] overflow-hidden">
+                <div className="flex flex-wrap items-center gap-5 px-3.5 py-3">
+                  {/* Blue SCORE block */}
+                  <div className="flex flex-col items-center pr-5 border-r border-[#303030]">
+                    <span className="w-full text-center rounded-[2px] bg-[#2E51A2] px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      Score
+                    </span>
+                    <span className="mt-1 text-[26px] font-bold text-white leading-none tabular-nums">
+                      {displayScore}
+                    </span>
+                    <span className="mt-1 text-[10px] text-[#9B9B9B] tabular-nums">
+                      {displayRatingsCount.toLocaleString()} users
                     </span>
                   </div>
-                  <div className="text-[11px] text-[#8EB4FF] flex flex-wrap items-center gap-2">
-                    <span>{novel.year || "Archive"}</span>
-                    <span className="text-[#444444]">|</span>
-                    <span>{novel.format}</span>
-                    <span className="text-[#444444]">|</span>
-                    <span>{novel.publisher}</span>
+
+                  {/* Ranked / Popularity / Members */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+                      {novel.ranked && (
+                        <span>
+                          <span className="text-[#B0B0B0]">Ranked </span>
+                          <strong className="font-bold text-white tabular-nums">
+                            #{novel.ranked}
+                          </strong>
+                        </span>
+                      )}
+                      {novel.popularity && (
+                        <span>
+                          <span className="text-[#B0B0B0]">Popularity </span>
+                          <strong className="font-bold text-white tabular-nums">
+                            #{novel.popularity}
+                          </strong>
+                        </span>
+                      )}
+                      <span>
+                        <span className="text-[#B0B0B0]">Members </span>
+                        <strong className="font-bold text-white tabular-nums">
+                          {displayMembers.toLocaleString()}
+                        </strong>
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-[#8EB4FF] flex flex-wrap items-center gap-2">
+                      <span>{novel.year || "Archive"}</span>
+                      <span className="text-[#444444]">|</span>
+                      <span>{novel.format}</span>
+                      <span className="text-[#444444]">|</span>
+                      <span>{novel.publisher}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Inline quick controls strip inside Score Box */}
-              <div className="flex flex-wrap items-center gap-2 pt-2.5 border-t border-[#2A2A2A] text-xs">
-                <select
-                  value={currentStatus}
-                  onChange={(e) => handleQuickStatus(e.target.value)}
-                  aria-label="Reading Status"
-                  className="h-7 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
-                >
-                  <option value="none">+ Add to My Shelf</option>
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="inline-flex items-center gap-1 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 h-7">
-                  <Star
-                    className={cn(
-                      "h-3.5 w-3.5",
-                      currentRating > 0
-                        ? "fill-[#FACC15] text-[#FACC15]"
-                        : "text-[#9B9B9B]"
-                    )}
-                  />
+                {/* Inline quick controls strip inside Score Box */}
+                <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 border-t border-[#2A2A2A] bg-[#181818] text-xs">
                   <select
-                    value={currentRating}
-                    onChange={(e) => setRating(novel, Number(e.target.value))}
-                    aria-label="Quick Score"
-                    className="bg-transparent text-xs text-white focus:outline-none"
+                    value={currentStatus}
+                    onChange={(e) => handleQuickStatus(e.target.value)}
+                    aria-label="Reading Status"
+                    className="h-7 rounded-[3px] border border-[#3A3A3A] bg-[#222222] px-2.5 text-xs font-medium text-white focus:outline-none focus:border-[#4C74D6]"
                   >
-                    <option value={0} className="bg-[#181818]">
-                      Select
-                    </option>
-                    {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
-                      <option key={n} value={n} className="bg-[#181818]">
-                        {MAL_SCORE_LABELS[n]}
+                    <option value="none">Add to My Shelf</option>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
-                </div>
 
-                <div className="inline-flex items-center gap-1.5 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2.5 h-7 text-xs text-[#CCCCCC]">
-                  <span>Issues:</span>
-                  <span className="font-mono text-white">
-                    {issuesRead}/{novel.issues || "?"}
-                  </span>
-                </div>
+                  <div className="inline-flex items-center gap-1 rounded-[3px] border border-[#3A3A3A] bg-[#222222] px-2.5 h-7">
+                    <select
+                      value={currentRating}
+                      onChange={(e) => setRating(novel, Number(e.target.value))}
+                      aria-label="Quick Score"
+                      className="bg-transparent text-xs text-white focus:outline-none"
+                    >
+                      <option value={0} className="bg-[#181818]">
+                        Select
+                      </option>
+                      {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
+                        <option key={n} value={n} className="bg-[#181818]">
+                          {MAL_SCORE_LABELS[n]}
+                        </option>
+                      ))}
+                    </select>
+                    <Star
+                      className={cn(
+                        "h-3.5 w-3.5 shrink-0",
+                        currentRating > 0
+                          ? "fill-[#FACC15] text-[#FACC15]"
+                          : "fill-[#FACC15]/70 text-[#FACC15]/70"
+                      )}
+                    />
+                  </div>
 
-                {userEntry?.customUrl && (
-                  <a
-                    href={userEntry.customUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ml-auto inline-flex items-center gap-1 rounded-[2px] bg-[#2DB039]/20 border border-[#2DB039]/40 px-2.5 h-7 text-xs font-semibold text-[#4ADE80] hover:bg-[#2DB039]/30"
-                  >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    Read Source
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
+                  {novel.volumes && (
+                    <div className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#333333] bg-[#222222] px-2.5 h-7 text-xs text-[#CCCCCC] tabular-nums">
+                      <span>Volumes:</span>
+                      <span className="text-white">{novel.volumes}</span>
+                    </div>
+                  )}
+
+                  <div className="inline-flex items-center gap-1.5 rounded-[3px] border border-[#333333] bg-[#222222] px-2.5 h-7 text-xs text-[#CCCCCC] tabular-nums">
+                    <span>
+                      {novel.format === "Manga" || novel.format === "Manhwa"
+                        ? "Chapters:"
+                        : "Issues:"}
+                    </span>
+                    <span className="text-white">
+                      {issuesRead}/{novel.issues || "?"}
+                    </span>
+                  </div>
+
+                  {userEntry?.customUrl && (
+                    <a
+                      href={userEntry.customUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ml-auto inline-flex items-center gap-1 rounded-[3px] bg-[#2DB039]/20 border border-[#2DB039]/40 px-2.5 h-7 text-xs font-semibold text-[#4ADE80] hover:bg-[#2DB039]/30"
+                    >
+                      <BookOpen className="h-3.5 w-3.5" />
+                      Read Source
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
               </div>
+
+              <p className="text-[11px] text-[#D86C6C]">
+                * Your list is saved locally.
+              </p>
             </div>
 
             {/* TAB: DETAILS */}
@@ -572,7 +632,7 @@ function NovelDetailClient() {
                         View all ({novel.issuesList.length})
                       </button>
                     </div>
-                    <div className="divide-y divide-[#252525] border border-[#2C2C2C] bg-[#161616]">
+                    <div className="divide-y divide-[#252525] rounded-[4px] border border-[#2C2C2C] bg-[#161616] overflow-hidden">
                       {novel.issuesList.slice(0, 5).map((issue) => {
                         const done = issuesRead >= issue.number;
                         return (
@@ -581,7 +641,7 @@ function NovelDetailClient() {
                             className="flex items-center justify-between px-3 py-2 text-xs"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <span className="font-mono text-[#9B9B9B] w-7 shrink-0">
+                              <span className="text-[#9B9B9B] w-7 shrink-0 tabular-nums">
                                 #{issue.number}
                               </span>
                               <span className="truncate text-[#E5E5E5]">
@@ -600,7 +660,7 @@ function NovelDetailClient() {
                                   setProgress(novel, done ? issue.number - 1 : issue.number)
                                 }
                                 className={cn(
-                                  "px-2 py-0.5 rounded-[2px] border text-[11px]",
+                                  "px-2 py-0.5 rounded-[3px] border text-[11px]",
                                   done
                                     ? "bg-[#2E51A2] border-[#4C74D6] text-white"
                                     : "bg-[#222222] border-[#333333] text-[#9B9B9B] hover:text-white"
@@ -616,8 +676,8 @@ function NovelDetailClient() {
                   </section>
                 )}
 
-                {/* Related Entries (MAL thumbnail strip) */}
-                {relatedNovels.length > 0 && (
+                {/* Related Entries (AniList relations or curated matches) */}
+                {(novel.relatedEntries?.length || relatedNovels.length > 0) && (
                   <section className="space-y-2">
                     <div className="flex items-center justify-between border-b border-[#2E2E2E] pb-1">
                       <h2 className="text-sm font-bold text-white">Related Entries</h2>
@@ -630,39 +690,68 @@ function NovelDetailClient() {
                       </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {relatedNovels.slice(0, 4).map((rel) => {
-                        const sameWriter = rel.writers.some((w) =>
-                          novel.writers.includes(w)
-                        );
-                        return (
-                          <Link
-                            key={rel.id}
-                            href={getNovelHref(rel)}
-                            className="flex gap-2.5 border border-[#2C2C2C] bg-[#161616] p-2 hover:border-[#4C74D6] transition-colors"
-                          >
-                            <div className="w-11 h-16 shrink-0 bg-[#222222] overflow-hidden">
-                              {rel.coverUrl && (
-                                <img
-                                  src={rel.coverUrl}
-                                  alt={rel.title}
-                                  className="h-full w-full object-cover"
-                                />
-                              )}
-                            </div>
-                            <div className="min-w-0 text-xs space-y-0.5">
-                              <span className="text-[10px] text-[#9B9B9B] uppercase block">
-                                {sameWriter ? "Same Writer" : rel.genres[0]}
-                              </span>
-                              <span className="font-semibold mal-link block truncate">
-                                {rel.title}
-                              </span>
-                              <span className="text-[11px] text-[#9B9B9B] block truncate">
-                                {rel.format} · {rel.year}
-                              </span>
-                            </div>
-                          </Link>
-                        );
-                      })}
+                      {novel.relatedEntries?.length
+                        ? novel.relatedEntries.slice(0, 4).map((rel) => (
+                            <Link
+                              key={rel.id}
+                              href={rel.href}
+                              className="flex gap-2.5 rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-2 hover:border-[#4C74D6] transition-colors"
+                            >
+                              <div className="w-11 h-16 shrink-0 rounded-[2px] bg-[#222222] overflow-hidden">
+                                {rel.coverUrl && (
+                                  <img
+                                    src={rel.coverUrl}
+                                    alt={rel.title}
+                                    className="h-full w-full object-cover"
+                                  />
+                                )}
+                              </div>
+                              <div className="min-w-0 text-xs space-y-0.5">
+                                <span className="text-[10px] text-[#9B9B9B] block">
+                                  {rel.relation}
+                                </span>
+                                <span className="font-semibold mal-link block truncate">
+                                  {rel.title}
+                                </span>
+                                <span className="text-[11px] text-[#9B9B9B] block truncate">
+                                  {rel.format}
+                                </span>
+                              </div>
+                            </Link>
+                          ))
+                        : relatedNovels.slice(0, 4).map((rel) => {
+                            const sameWriter = rel.writers.some((w) =>
+                              novel.writers.includes(w)
+                            );
+                            return (
+                              <Link
+                                key={rel.id}
+                                href={getNovelHref(rel)}
+                                className="flex gap-2.5 rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-2 hover:border-[#4C74D6] transition-colors"
+                              >
+                                <div className="w-11 h-16 shrink-0 rounded-[2px] bg-[#222222] overflow-hidden">
+                                  {rel.coverUrl && (
+                                    <img
+                                      src={rel.coverUrl}
+                                      alt={rel.title}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  )}
+                                </div>
+                                <div className="min-w-0 text-xs space-y-0.5">
+                                  <span className="text-[10px] text-[#9B9B9B] uppercase block">
+                                    {sameWriter ? "Same Writer" : rel.genres[0]}
+                                  </span>
+                                  <span className="font-semibold mal-link block truncate">
+                                    {rel.title}
+                                  </span>
+                                  <span className="text-[11px] text-[#9B9B9B] block truncate">
+                                    {rel.format} · {rel.year}
+                                  </span>
+                                </div>
+                              </Link>
+                            );
+                          })}
                     </div>
                   </section>
                 )}
@@ -706,7 +795,7 @@ function NovelDetailClient() {
                 </div>
 
                 {novel.issuesList && novel.issuesList.length > 0 ? (
-                  <div className="border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616]">
+                  <div className="rounded-[4px] border border-[#2C2C2C] divide-y divide-[#252525] bg-[#161616] overflow-hidden">
                     {novel.issuesList.map((issue) => {
                       const done = issuesRead >= issue.number;
                       return (
@@ -715,7 +804,7 @@ function NovelDetailClient() {
                           className="flex items-center justify-between px-3 py-2 text-xs hover:bg-[#1E1E1E]"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono text-[#9B9B9B] w-8 shrink-0">
+                            <span className="text-[#9B9B9B] w-8 shrink-0 tabular-nums">
                               #{issue.number}
                             </span>
                             <span className="text-[#E5E5E5] truncate">
@@ -734,7 +823,7 @@ function NovelDetailClient() {
                                 setProgress(novel, done ? issue.number - 1 : issue.number)
                               }
                               className={cn(
-                                "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[2px] border text-[11px]",
+                                "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[3px] border text-[11px]",
                                 done
                                   ? "bg-[#2E51A2] border-[#4C74D6] text-white"
                                   : "bg-[#222222] border-[#333333] text-[#9B9B9B] hover:text-white"
@@ -749,7 +838,7 @@ function NovelDetailClient() {
                     })}
                   </div>
                 ) : (
-                  <div className="border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B] space-y-2">
+                  <div className="rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B] space-y-2">
                     <p>
                       No chapter breakdown is archived for this edition yet. You can still
                       track your exact issue/chapter count in the left sidebar or attach
@@ -897,7 +986,7 @@ function ReviewsList({
 }) {
   if (logs.length === 0) {
     return (
-      <div className="border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B]">
+      <div className="rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-4 text-xs text-[#9B9B9B]">
         No diary logs or reviews recorded yet for this title.
       </div>
     );
@@ -911,14 +1000,14 @@ function ReviewsList({
         return (
           <div
             key={log.id}
-            className="border border-[#2C2C2C] bg-[#161616] p-3 space-y-2 text-xs"
+            className="rounded-[4px] border border-[#2C2C2C] bg-[#161616] p-3 space-y-2 text-xs"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#242424] pb-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-[#9B9B9B]">{log.date}</span>
+                <span className="text-[#9B9B9B] tabular-nums">{log.date}</span>
                 {meta && (
                   <span
-                    className={`border px-1.5 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
+                    className={`rounded-[3px] border px-1.5 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
                   >
                     {meta.label}
                   </span>

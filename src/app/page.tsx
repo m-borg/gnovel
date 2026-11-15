@@ -5,9 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Globe,
   LayoutGrid,
   List as ListIcon,
+  Loader2,
   Search,
   Sparkles,
   Star,
@@ -17,88 +20,104 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NovelCard, getNovelHref } from "@/components/NovelCard";
 import { LogModal } from "@/components/LogModal";
+import { browseAniList } from "@/lib/anilist";
 import {
   ALL_GENRES,
   CURATED_NOVELS,
   EDITORIAL_COLLECTIONS,
   getCuratedNovelById,
 } from "@/lib/catalog";
-import { cacheNovelSnapshot, searchOpenLibrary } from "@/lib/openlibrary";
+import {
+  browseOpenLibraryCatalog,
+  cacheNovelSnapshot,
+  searchOpenLibrary,
+  type OpenLibraryCategory,
+} from "@/lib/openlibrary";
 import { STATUS_OPTIONS, getStatusMeta } from "@/lib/status";
 import { useGNovel } from "@/lib/storage";
-import type { GraphicNovel, NovelFormat, ReadingStatus } from "@/lib/types";
+import type { GraphicNovel, ReadingStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type SortOption = "ranked" | "popularity" | "newest" | "title";
-const FORMAT_FILTERS: ("All" | NovelFormat)[] = [
+type CatalogScope = "all" | "comics" | "manga" | "curated";
+type SortOption = "score" | "popularity" | "newest";
+type MangaOrigin = "all" | "JP" | "KR";
+
+const COMIC_CATEGORIES: { id: OpenLibraryCategory; label: string; alGenre?: string }[] = [
+  { id: "all", label: "All Genres" },
+  { id: "superhero", label: "Superhero & Action", alGenre: "Action" },
+  { id: "scifi", label: "Sci-Fi & Cyberpunk", alGenre: "Sci-Fi" },
+  { id: "horror", label: "Horror & Supernatural", alGenre: "Horror" },
+  { id: "noir", label: "Noir & Mystery", alGenre: "Mystery" },
+  { id: "memoir", label: "Memoir & Drama", alGenre: "Drama" },
+];
+
+const MANGA_GENRES = [
   "All",
-  "Graphic Novel",
-  "Series",
-  "Manga",
-  "Omnibus",
+  "Action",
+  "Adventure",
+  "Drama",
+  "Fantasy",
+  "Horror",
+  "Mystery",
+  "Psychological",
+  "Romance",
+  "Sci-Fi",
+  "Slice of Life",
+  "Supernatural",
+  "Thriller",
 ];
 
 function HomePageClient() {
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") || "";
+  const urlScope = searchParams.get("scope") as CatalogScope | null;
+  const routeKey = `${urlQuery}::${urlScope || "all"}`;
 
+  return (
+    <HomePageContent
+      key={routeKey}
+      urlQuery={urlQuery}
+      urlScope={urlScope}
+    />
+  );
+}
+
+function HomePageContent({
+  urlQuery,
+  urlScope,
+}: {
+  urlQuery: string;
+  urlScope: CatalogScope | null;
+}) {
   const { state, mounted, getEntry, setStatus, loadStarterShelf } = useGNovel();
 
-  const [queryOverride, setQueryOverride] = useState<string | null>(null);
-  const query = queryOverride !== null ? queryOverride : urlQuery;
-
-  const [selectedGenre, setSelectedGenre] = useState<string>("All");
-  const [selectedFormat, setSelectedFormat] = useState<"All" | NovelFormat>("All");
-  const [sortBy, setSortBy] = useState<SortOption>("ranked");
+  const [scope, setScope] = useState<CatalogScope>(
+    urlScope && ["all", "comics", "manga", "curated"].includes(urlScope)
+      ? urlScope
+      : "all"
+  );
+  const [query, setQuery] = useState(urlQuery);
+  const [comicCategory, setComicCategory] = useState<OpenLibraryCategory>("all");
+  const [mangaGenre, setMangaGenre] = useState<string>("All");
+  const [curatedGenre, setCuratedGenre] = useState<string>("All");
+  const [mangaOrigin, setMangaOrigin] = useState<MangaOrigin>("all");
+  const [sortBy, setSortBy] = useState<SortOption>("score");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [page, setPage] = useState(1);
 
-  const [remoteResults, setRemoteResults] = useState<GraphicNovel[]>([]);
-  const [searchingRemote, setSearchingRemote] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<GraphicNovel[]>([]);
+  const [totalFound, setTotalFound] = useState<number>(71500);
+  const [loadingRemote, setLoadingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState(false);
-  const [comicsOnlySearch, setComicsOnlySearch] = useState(true);
-
   const [logNovel, setLogNovel] = useState<GraphicNovel | null>(null);
 
-  const handleQueryChange = (next: string) => {
-    setQueryOverride(next);
-    if (next.trim().length < 2) {
-      setRemoteResults([]);
-      setSearchingRemote(false);
-      setRemoteError(false);
-    }
-  };
-
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return;
-
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setSearchingRemote(true);
-      setRemoteError(false);
-      try {
-        const docs = await searchOpenLibrary(trimmed, comicsOnlySearch, controller.signal);
-        setRemoteResults(docs);
-      } catch (err) {
-        if ((err as Error).name !== "AbortError") {
-          setRemoteError(true);
-        }
-      } finally {
-        setSearchingRemote(false);
-      }
-    }, 450);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, comicsOnlySearch]);
-
-  const localMatches = useMemo(() => {
+  // Curated matches (instant offline baseline)
+  const curatedMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = CURATED_NOVELS.filter((novel) => {
-      if (selectedGenre !== "All" && !novel.genres.includes(selectedGenre)) return false;
-      if (selectedFormat !== "All" && novel.format !== selectedFormat) return false;
+      if (scope === "curated" && curatedGenre !== "All") {
+        if (!novel.genres.includes(curatedGenre)) return false;
+      }
       if (!q) return true;
       return (
         novel.title.toLowerCase().includes(q) ||
@@ -110,38 +129,212 @@ function HomePageClient() {
     });
 
     const copy = [...filtered];
-    if (sortBy === "ranked") {
+    if (sortBy === "score") {
       copy.sort((a, b) => b.communityScore - a.communityScore);
     } else if (sortBy === "popularity") {
       copy.sort((a, b) => (b.membersCount || 0) - (a.membersCount || 0));
     } else if (sortBy === "newest") {
       copy.sort((a, b) => b.year - a.year);
-    } else if (sortBy === "title") {
-      copy.sort((a, b) => a.title.localeCompare(b.title));
     }
     return copy;
-  }, [query, selectedGenre, selectedFormat, sortBy]);
+  }, [query, scope, curatedGenre, sortBy]);
 
-  const deduplicatedRemote = useMemo(() => {
-    const curatedOlKeys = new Set(CURATED_NOVELS.map((n) => n.olKey).filter(Boolean));
-    const curatedTitles = new Set(CURATED_NOVELS.map((n) => n.title.toLowerCase()));
-    return remoteResults.filter(
-      (r) =>
-        (!r.olKey || !curatedOlKeys.has(r.olKey)) &&
-        !curatedTitles.has(r.title.toLowerCase())
-    );
-  }, [remoteResults]);
+  // Live paginated Open Library + AniList catalog
+  useEffect(() => {
+    if (scope === "curated") {
+      return;
+    }
+
+    const controller = new AbortController();
+    const trimmed = query.trim();
+
+    const timer = setTimeout(async () => {
+      setLoadingRemote(true);
+      setRemoteError(false);
+
+      try {
+        const catMeta = COMIC_CATEGORIES.find((c) => c.id === comicCategory);
+
+        if (trimmed.length >= 2) {
+          // Search across Open Library and/or AniList
+          const promises: Promise<GraphicNovel[]>[] = [];
+
+          if (scope === "all" || scope === "comics") {
+            promises.push(
+              searchOpenLibrary(trimmed, true, controller.signal).catch(() => [])
+            );
+          }
+          if (scope === "all" || scope === "manga") {
+            promises.push(
+              browseAniList({
+                query: trimmed,
+                genre: scope === "manga" ? mangaGenre : catMeta?.alGenre,
+                country: mangaOrigin === "all" ? undefined : mangaOrigin,
+                sort: sortBy,
+                page,
+                perPage: scope === "all" ? 24 : 48,
+                signal: controller.signal,
+              })
+                .then((r) => r.items)
+                .catch(() => [])
+            );
+          }
+
+          const settled = await Promise.all(promises);
+          const mergedRemote = settled.flat();
+
+          // Deduplicate against curated titles matching this search
+          const seenTitles = new Set(
+            curatedMatches.map((n) => n.title.toLowerCase().trim())
+          );
+          const uniqueRemote = mergedRemote.filter((item) => {
+            const key = item.title.toLowerCase().trim();
+            if (seenTitles.has(key)) return false;
+            seenTitles.add(key);
+            return true;
+          });
+
+          const combined = [...curatedMatches, ...uniqueRemote];
+          setCatalogItems(combined);
+          setTotalFound(combined.length);
+        } else if (scope === "comics") {
+          const res = await browseOpenLibraryCatalog({
+            category: comicCategory,
+            sort: sortBy,
+            page,
+            perPage: 48,
+            signal: controller.signal,
+          });
+          setCatalogItems(res.items);
+          setTotalFound(res.totalFound);
+        } else if (scope === "manga") {
+          const res = await browseAniList({
+            genre: mangaGenre,
+            country: mangaOrigin === "all" ? undefined : mangaOrigin,
+            sort: sortBy,
+            page,
+            perPage: 48,
+            signal: controller.signal,
+          });
+          setCatalogItems(res.items);
+          setTotalFound(res.totalFound);
+        } else {
+          // scope === "all": 24 Western Comics/GNs + 24 Manga/Manhwa per page
+          const [olRes, alRes] = await Promise.allSettled([
+            browseOpenLibraryCatalog({
+              category: comicCategory,
+              sort: sortBy,
+              page,
+              perPage: 24,
+              signal: controller.signal,
+            }),
+            browseAniList({
+              genre: catMeta?.alGenre,
+              sort: sortBy,
+              page,
+              perPage: 24,
+              signal: controller.signal,
+            }),
+          ]);
+
+          const olItems =
+            olRes.status === "fulfilled" ? olRes.value.items : [];
+          const olTotal =
+            olRes.status === "fulfilled" ? olRes.value.totalFound : 0;
+          const alItems =
+            alRes.status === "fulfilled" ? alRes.value.items : [];
+          const alTotal =
+            alRes.status === "fulfilled" ? alRes.value.totalFound : 0;
+
+          const basePool =
+            page === 1 && comicCategory === "all"
+              ? [...curatedMatches.slice(0, 12), ...olItems, ...alItems]
+              : [...olItems, ...alItems];
+
+          const seen = new Set<string>();
+          const deduped: GraphicNovel[] = [];
+          for (const item of basePool) {
+            const key = item.title.toLowerCase().trim();
+            if (!seen.has(key)) {
+              seen.add(key);
+              deduped.push(item);
+            }
+          }
+
+          if (sortBy === "score") {
+            deduped.sort((a, b) => b.communityScore - a.communityScore);
+          } else if (sortBy === "popularity") {
+            deduped.sort(
+              (a, b) => (b.membersCount || 0) - (a.membersCount || 0)
+            );
+          } else if (sortBy === "newest") {
+            deduped.sort((a, b) => b.year - a.year);
+          }
+
+          setCatalogItems(deduped.slice(0, 48));
+          setTotalFound(olTotal + alTotal || deduped.length);
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          setRemoteError(true);
+        }
+      } finally {
+        setLoadingRemote(false);
+      }
+    }, trimmed.length >= 2 ? 320 : 80);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [scope, query, comicCategory, mangaGenre, mangaOrigin, sortBy, page, curatedMatches]);
+
+  const displayedItems = scope === "curated" ? curatedMatches : catalogItems;
+  const fallbackDisplay =
+    displayedItems.length > 0 ? displayedItems : curatedMatches;
+
+  const perPage = 48;
+  const totalPages =
+    scope === "curated" || query.trim().length >= 2
+      ? 1
+      : Math.max(1, Math.min(1000, Math.ceil(totalFound / perPage)));
 
   const trackedCount = mounted ? Object.keys(state.library).length : 0;
+
+  const isRemoteLoading = scope !== "curated" && loadingRemote;
+  const isRemoteError = scope !== "curated" && remoteError;
+
+  const switchScope = (next: CatalogScope) => {
+    setScope(next);
+    setPage(1);
+    if (next === "curated") {
+      setLoadingRemote(false);
+      setRemoteError(false);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1080px] border-x border-b border-[#2A2A2A] bg-[#121212]">
       {/* MAL Title Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2E2E2E] bg-[#222222] px-4 py-2.5">
-        <div>
+        <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-base sm:text-lg font-bold text-white">
-            {query ? `Search Results for "${query}"` : "Top Graphic Novels & Comics"}
+            {query.trim()
+              ? `Search Results for "${query.trim()}"`
+              : scope === "comics"
+              ? "Comics & Graphic Novels Database"
+              : scope === "manga"
+              ? "Manga & Manhwa Database"
+              : scope === "curated"
+              ? "Curated Graphic Novel Essentials"
+              : "Top Graphic Novels, Comics & Manga"}
           </h1>
+          <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#2E51A2]/25 border border-[#4C74D6]/40 px-2 py-0.5 text-[11px] font-medium text-[#8EB4FF] tabular-nums">
+            <Globe className="h-3 w-3" />
+            {scope === "curated"
+              ? `${curatedMatches.length} curated`
+              : `${totalFound.toLocaleString()}+ indexed`}
+          </span>
         </div>
 
         <div className="flex items-center gap-3 text-xs">
@@ -162,22 +355,52 @@ function HomePageClient() {
         </div>
       </div>
 
+      {/* MAL Database Underline Scope Tabs */}
+      <div className="flex items-end gap-1 overflow-x-auto border-b border-[#34549E] bg-[#181818] px-3 pt-2 text-xs">
+        {[
+          { id: "all" as const, label: "All Catalog (71,000+)" },
+          { id: "comics" as const, label: "Western Comics & GNs (66,500+)" },
+          { id: "manga" as const, label: "Manga & Manhwa (5,000+)" },
+          { id: "curated" as const, label: `Curated Essentials (${CURATED_NOVELS.length})` },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => switchScope(tab.id)}
+            className={cn(
+              "shrink-0 px-3 py-1.5 rounded-t-[3px] transition-colors",
+              scope === tab.id
+                ? "bg-[#E2E8F4] text-[#141414] font-bold"
+                : "text-[#8EB4FF] hover:text-white hover:bg-[#222222]"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filter & Search Toolbar */}
-      <div className="border-b border-[#2A2A2A] bg-[#161616] p-3 space-y-3">
+      <div className="border-b border-[#2A2A2A] bg-[#161616] p-3 space-y-2.5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
           <div className="relative flex-1 max-w-md">
             <Search className="h-3.5 w-3.5 text-[#9B9B9B] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <Input
               type="search"
               value={query}
-              onChange={(e) => handleQueryChange(e.target.value)}
-              placeholder="Filter catalog or search Open Library..."
-              className="h-8 pl-8 pr-8 rounded-[2px] border-[#333333] bg-[#101010] text-xs"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search any comic, graphic novel, manga, or creator..."
+              className="h-8 pl-8 pr-8 rounded-[3px] border-[#333333] bg-[#101010] text-xs"
             />
             {query && (
               <button
                 type="button"
-                onClick={() => handleQueryChange("")}
+                onClick={() => {
+                  setQuery("");
+                  setPage(1);
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9B9B9B] hover:text-white"
                 aria-label="Clear search"
               >
@@ -187,37 +410,42 @@ function HomePageClient() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <select
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value as "All" | NovelFormat)}
-              aria-label="Filter format"
-              className="h-8 rounded-[2px] border border-[#333333] bg-[#101010] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
-            >
-              {FORMAT_FILTERS.map((f) => (
-                <option key={f} value={f}>
-                  Format: {f}
-                </option>
-              ))}
-            </select>
+            {scope === "manga" && (
+              <select
+                value={mangaOrigin}
+                onChange={(e) => {
+                  setMangaOrigin(e.target.value as MangaOrigin);
+                  setPage(1);
+                }}
+                aria-label="Filter origin"
+                className="h-8 rounded-[3px] border border-[#333333] bg-[#101010] px-2.5 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+              >
+                <option value="all">Origin: All</option>
+                <option value="JP">Japan (Manga)</option>
+                <option value="KR">South Korea (Manhwa)</option>
+              </select>
+            )}
 
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              onChange={(e) => {
+                setSortBy(e.target.value as SortOption);
+                setPage(1);
+              }}
               aria-label="Sort catalog"
-              className="h-8 rounded-[2px] border border-[#333333] bg-[#101010] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+              className="h-8 rounded-[3px] border border-[#333333] bg-[#101010] px-2.5 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
             >
-              <option value="ranked">Sort: Top Ranked</option>
+              <option value="score">Sort: Top Ranked</option>
               <option value="popularity">Sort: Most Popular</option>
               <option value="newest">Sort: Newest</option>
-              <option value="title">Sort: Title A–Z</option>
             </select>
 
-            <div className="inline-flex border border-[#333333] bg-[#101010] p-0.5 rounded-[2px]">
+            <div className="inline-flex border border-[#333333] bg-[#101010] p-0.5 rounded-[3px]">
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
                 className={cn(
-                  "px-2 py-1 text-xs inline-flex items-center gap-1 rounded-[1px]",
+                  "px-2.5 py-1 text-xs inline-flex items-center gap-1 rounded-[2px]",
                   viewMode === "table"
                     ? "bg-[#2E51A2] text-white font-semibold"
                     : "text-[#9B9B9B] hover:text-white"
@@ -230,7 +458,7 @@ function HomePageClient() {
                 type="button"
                 onClick={() => setViewMode("grid")}
                 className={cn(
-                  "px-2 py-1 text-xs inline-flex items-center gap-1 rounded-[1px]",
+                  "px-2.5 py-1 text-xs inline-flex items-center gap-1 rounded-[2px]",
                   viewMode === "grid"
                     ? "bg-[#2E51A2] text-white font-semibold"
                     : "text-[#9B9B9B] hover:text-white"
@@ -243,44 +471,124 @@ function HomePageClient() {
           </div>
         </div>
 
-        {/* Genre Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[11px]">
-          {["All", ...ALL_GENRES].map((genre) => (
-            <button
-              key={genre}
-              type="button"
-              onClick={() => setSelectedGenre(genre)}
-              className={cn(
-                "shrink-0 px-2.5 py-1 rounded-[2px] border transition-colors",
-                selectedGenre === genre
-                  ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
-                  : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
-              )}
-            >
-              {genre}
-            </button>
-          ))}
+        {/* Genre / Category Filter Strip */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[11px]">
+          {(scope === "all" || scope === "comics") &&
+            COMIC_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setComicCategory(cat.id);
+                  setPage(1);
+                }}
+                className={cn(
+                  "shrink-0 px-2.5 py-1 rounded-[3px] border transition-colors",
+                  comicCategory === cat.id
+                    ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
+                    : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
+                )}
+              >
+                {cat.label}
+              </button>
+            ))}
+
+          {scope === "manga" &&
+            MANGA_GENRES.map((genre) => (
+              <button
+                key={genre}
+                type="button"
+                onClick={() => {
+                  setMangaGenre(genre);
+                  setPage(1);
+                }}
+                className={cn(
+                  "shrink-0 px-2.5 py-1 rounded-[3px] border transition-colors",
+                  mangaGenre === genre
+                    ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
+                    : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
+                )}
+              >
+                {genre}
+              </button>
+            ))}
+
+          {scope === "curated" &&
+            ["All", ...ALL_GENRES].map((genre) => (
+              <button
+                key={genre}
+                type="button"
+                onClick={() => setCuratedGenre(genre)}
+                className={cn(
+                  "shrink-0 px-2.5 py-1 rounded-[3px] border transition-colors",
+                  curatedGenre === genre
+                    ? "bg-[#2E51A2] border-[#4C74D6] text-white font-semibold"
+                    : "bg-[#121212] border-[#2C2C2C] text-[#9B9B9B] hover:text-white"
+                )}
+              >
+                {genre}
+              </button>
+            ))}
         </div>
       </div>
 
-      {/* Main Catalog List */}
-      <div className="p-3 sm:p-4 space-y-6">
-        {localMatches.length === 0 ? (
-          <div className="border border-[#2C2C2C] bg-[#161616] p-8 text-center text-xs text-[#9B9B9B] space-y-2">
-            <p>No curated titles matched those filters.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedGenre("All");
-                setSelectedFormat("All");
+      {/* Main Catalog Body */}
+      <div className="p-3 sm:p-4 space-y-5">
+        {/* Pagination & Live Status Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#9B9B9B]">
+          <div className="flex items-center gap-2">
+            {isRemoteLoading ? (
+              <span className="inline-flex items-center gap-1.5 text-[#8EB4FF]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading live catalog page {page}...
+              </span>
+            ) : (
+              <span className="tabular-nums">
+                Showing{" "}
+                <strong className="text-white">
+                  {((page - 1) * perPage + 1).toLocaleString()}–
+                  {((page - 1) * perPage + fallbackDisplay.length).toLocaleString()}
+                </strong>{" "}
+                of{" "}
+                <strong className="text-white">
+                  {scope === "curated"
+                    ? curatedMatches.length.toLocaleString()
+                    : totalFound.toLocaleString()}
+                </strong>{" "}
+                entries
+              </span>
+            )}
+            {isRemoteError && (
+              <span className="text-[#FACC15]">
+                (Live API slow — showing cached curated entries)
+              </span>
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <PaginationControls
+              page={page}
+              totalPages={totalPages}
+              onChange={(next) => {
+                setPage(next);
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="mal-link"
-            >
-              Reset filters
-            </button>
+            />
+          )}
+        </div>
+
+        {/* Loading skeleton when fetching new empty page */}
+        {isRemoteLoading && catalogItems.length === 0 ? (
+          <div className="space-y-2">
+            {Array.from({ length: 10 }).map((_, idx) => (
+              <Skeleton
+                key={idx}
+                className="h-20 w-full rounded-[4px] bg-[#1C1C1C]"
+              />
+            ))}
           </div>
         ) : viewMode === "table" ? (
-          <div className="overflow-x-auto border border-[#2C2C2C]">
+          <div className="overflow-x-auto rounded-[4px] border border-[#2C2C2C]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#2E51A2] text-white text-[11px] font-bold">
@@ -294,18 +602,21 @@ function HomePageClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#252525] bg-[#141414]">
-                {localMatches.map((novel, idx) => {
+                {fallbackDisplay.map((novel, idx) => {
                   const entry = getEntry(novel.id);
-                  const statusMeta = entry?.status ? getStatusMeta(entry.status) : undefined;
+                  const statusMeta = entry?.status
+                    ? getStatusMeta(entry.status)
+                    : undefined;
                   const href = getNovelHref(novel);
+                  const displayRank = (page - 1) * perPage + idx + 1;
 
                   return (
                     <tr
                       key={novel.id}
                       className="hover:bg-[#1B1B1B] transition-colors"
                     >
-                      <td className="py-2.5 px-3 text-center font-mono text-base font-bold text-[#9B9B9B]">
-                        {novel.ranked || idx + 1}
+                      <td className="py-2.5 px-3 text-center text-base font-bold text-[#9B9B9B] tabular-nums">
+                        {displayRank}
                       </td>
 
                       <td className="py-2.5 px-3">
@@ -313,7 +624,7 @@ function HomePageClient() {
                           <Link
                             href={href}
                             onClick={() => cacheNovelSnapshot(novel)}
-                            className="w-12 h-17 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden"
+                            className="w-12 h-17 shrink-0 rounded-[3px] border border-[#333333] bg-[#222222] overflow-hidden"
                           >
                             {novel.coverUrl && (
                               <img
@@ -325,20 +636,35 @@ function HomePageClient() {
                             )}
                           </Link>
                           <div className="min-w-0 space-y-0.5">
-                            <Link
-                              href={href}
-                              onClick={() => cacheNovelSnapshot(novel)}
-                              className="font-bold text-sm mal-link block"
-                            >
-                              {novel.title}
-                            </Link>
-                            <p className="text-[11px] text-[#9B9B9B]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link
+                                href={href}
+                                onClick={() => cacheNovelSnapshot(novel)}
+                                className="font-bold text-sm mal-link"
+                              >
+                                {novel.title}
+                              </Link>
+                              {novel.sourceLabel && (
+                                <span className="rounded-[2px] border border-[#2F2F2F] bg-[#1C1C1C] px-1.5 py-0.2 text-[10px] text-[#8A8A8A]">
+                                  {novel.sourceLabel}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#9B9B9B] truncate">
                               {novel.format}
-                              {novel.issues ? ` (${novel.issues} issues)` : ""} ·{" "}
-                              {novel.writers.join(", ")}
+                              {novel.volumes ? ` (${novel.volumes} vols)` : ""}
+                              {novel.issues
+                                ? ` · ${novel.issues} ${
+                                    novel.format === "Manga" || novel.format === "Manhwa"
+                                      ? "ch"
+                                      : "issues"
+                                  }`
+                                : ""}{" "}
+                              · {novel.writers.join(", ")}
                             </p>
-                            <p className="text-[11px] text-[#7F7F7F]">
-                              {novel.publisher} · {novel.year} ·{" "}
+                            <p className="text-[11px] text-[#7F7F7F] truncate tabular-nums">
+                              {novel.publisher}
+                              {novel.year ? ` · ${novel.year}` : ""} ·{" "}
                               {(novel.membersCount || 0).toLocaleString()} members
                             </p>
                           </div>
@@ -346,15 +672,17 @@ function HomePageClient() {
                       </td>
 
                       <td className="py-2.5 px-3 text-center">
-                        <span className="inline-flex items-center gap-1 font-mono text-sm font-bold text-[#FACC15]">
+                        <span className="inline-flex items-center gap-1 text-sm font-bold text-[#FACC15] tabular-nums">
                           <Star className="h-3.5 w-3.5 fill-[#FACC15] text-[#FACC15]" />
                           {novel.communityScore.toFixed(2)}
                         </span>
                       </td>
 
-                      <td className="py-2.5 px-3 text-center hidden sm:table-cell font-mono">
+                      <td className="py-2.5 px-3 text-center hidden sm:table-cell tabular-nums">
                         {entry?.rating ? (
-                          <span className="text-[#8EB4FF] font-bold">{entry.rating}</span>
+                          <span className="text-[#8EB4FF] font-bold">
+                            {entry.rating}
+                          </span>
                         ) : (
                           <span className="text-[#666666]">N/A</span>
                         )}
@@ -372,12 +700,14 @@ function HomePageClient() {
                                 }
                               } else {
                                 const target = val as Exclude<ReadingStatus, "none">;
-                                if (entry?.status !== target) setStatus(novel, target);
+                                if (entry?.status !== target) {
+                                  setStatus(novel, target);
+                                }
                               }
                             }}
                             aria-label={`Set status for ${novel.title}`}
                             className={cn(
-                              "h-7 w-28 rounded-[2px] border px-1.5 text-[11px] font-semibold focus:outline-none",
+                              "h-7 w-28 rounded-[3px] border px-1.5 text-[11px] font-semibold focus:outline-none",
                               statusMeta
                                 ? statusMeta.badgeClass
                                 : "border-[#3A3A3A] bg-[#222222] text-[#E5E5E5]"
@@ -413,64 +743,29 @@ function HomePageClient() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
-            {localMatches.map((novel) => (
+            {fallbackDisplay.map((novel, idx) => (
               <NovelCard
                 key={novel.id}
                 novel={novel}
-                rank={novel.ranked}
+                rank={(page - 1) * perPage + idx + 1}
                 onLogClick={(n) => setLogNovel(n)}
               />
             ))}
           </div>
         )}
 
-        {/* Live Open Library Results */}
-        {query.trim().length >= 2 && (
-          <section className="space-y-3 pt-4 border-t border-[#2A2A2A]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-[#8EB4FF]" />
-                <h2 className="text-sm font-bold text-white">
-                  Open Library Archive Results
-                </h2>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setComicsOnlySearch(!comicsOnlySearch)}
-                className="text-[11px] mal-link"
-              >
-                Scope: {comicsOnlySearch ? "Comics & Manga only" : "All Open Library books"}
-              </button>
-            </div>
-
-            {searchingRemote && deduplicatedRemote.length === 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="aspect-[2/3] bg-[#1C1C1C]" />
-                ))}
-              </div>
-            ) : remoteError ? (
-              <p className="text-xs text-[#9B9B9B]">
-                Open Library is unreachable right now. Curated catalog search still works
-                offline.
-              </p>
-            ) : deduplicatedRemote.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                {deduplicatedRemote.map((novel) => (
-                  <NovelCard
-                    key={novel.id}
-                    novel={novel}
-                    onLogClick={(n) => setLogNovel(n)}
-                  />
-                ))}
-              </div>
-            ) : !searchingRemote ? (
-              <p className="text-xs text-[#9B9B9B]">
-                No additional Open Library covers found for &ldquo;{query}&rdquo;.
-              </p>
-            ) : null}
-          </section>
+        {/* Bottom Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center pt-2">
+            <PaginationControls
+              page={page}
+              totalPages={totalPages}
+              onChange={(next) => {
+                setPage(next);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          </div>
         )}
 
         {/* Editorial Collections Strip */}
@@ -498,7 +793,7 @@ function HomePageClient() {
                     key={col.id}
                     href={`/lists/#${col.id}`}
                     className={cn(
-                      "border border-[#2C2C2C] bg-gradient-to-b p-3 hover:border-[#4C74D6] transition-colors",
+                      "rounded-[4px] border border-[#2C2C2C] bg-gradient-to-b p-3 hover:border-[#4C74D6] transition-colors",
                       col.accent
                     )}
                   >
@@ -506,7 +801,7 @@ function HomePageClient() {
                       {books.slice(0, 5).map((b) => (
                         <div
                           key={b.id}
-                          className="h-16 w-11 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden shadow"
+                          className="h-16 w-11 shrink-0 rounded-[2px] border border-[#333333] bg-[#222222] overflow-hidden shadow"
                         >
                           <img
                             src={b.coverUrl}
@@ -517,7 +812,9 @@ function HomePageClient() {
                         </div>
                       ))}
                     </div>
-                    <h3 className="text-xs font-bold text-[#8EB4FF]">{col.title}</h3>
+                    <h3 className="text-xs font-bold text-[#8EB4FF]">
+                      {col.title}
+                    </h3>
                     <p className="mt-0.5 text-[11px] text-[#9B9B9B] line-clamp-2">
                       {col.subtitle}
                     </p>
@@ -538,12 +835,51 @@ function HomePageClient() {
   );
 }
 
+function PaginationControls({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 text-xs">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onChange(Math.max(1, page - 1))}
+        className="inline-flex items-center gap-1 rounded-[3px] border border-[#333333] bg-[#1C1C1C] px-2.5 py-1 text-[#CCCCCC] hover:bg-[#2E51A2] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+        Prev 48
+      </button>
+
+      <span className="px-2.5 text-[#9B9B9B] tabular-nums">
+        Page <strong className="text-white">{page}</strong> of{" "}
+        {totalPages.toLocaleString()}
+      </span>
+
+      <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        className="inline-flex items-center gap-1 rounded-[3px] border border-[#333333] bg-[#1C1C1C] px-2.5 py-1 text-[#CCCCCC] hover:bg-[#2E51A2] hover:text-white disabled:opacity-40 disabled:pointer-events-none transition-colors"
+      >
+        Next 48
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <Suspense
       fallback={
         <div className="mx-auto max-w-[1080px] border-x border-[#2A2A2A] bg-[#121212] p-6">
-          <Skeleton className="h-96 w-full bg-[#1C1C1C]" />
+          <Skeleton className="h-96 w-full rounded-[4px] bg-[#1C1C1C]" />
         </div>
       }
     >

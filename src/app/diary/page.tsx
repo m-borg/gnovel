@@ -65,7 +65,7 @@ export default function DiaryPage() {
         <button
           type="button"
           onClick={() => setLogOpen(true)}
-          className="inline-flex items-center gap-1 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
+          className="inline-flex items-center gap-1 rounded-[3px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
         >
           <Plus className="h-3.5 w-3.5" />
           Log a Read
@@ -117,7 +117,7 @@ export default function DiaryPage() {
                   </span>
                 </div>
 
-                <div className="divide-y divide-[#252525] border border-[#2C2C2C] bg-[#161616]">
+                <div className="divide-y divide-[#252525] rounded-[4px] border border-[#2C2C2C] bg-[#161616] overflow-hidden">
                   {group.entries.map((entry) => {
                     const dayNum = entry.date.split("-")[2] || "—";
                     const meta = getStatusMeta(entry.status);
@@ -126,16 +126,16 @@ export default function DiaryPage() {
 
                     return (
                       <article key={entry.id} className="flex gap-3 p-3 text-xs">
-                        <div className="hidden sm:flex flex-col items-center justify-center w-11 h-14 shrink-0 border border-[#2E2E2E] bg-[#121212]">
+                        <div className="hidden sm:flex flex-col items-center justify-center w-11 h-14 shrink-0 rounded-[3px] border border-[#2E2E2E] bg-[#121212]">
                           <span className="text-[9px] uppercase text-[#9B9B9B]">Day</span>
-                          <span className="font-mono text-base font-bold text-white">
+                          <span className="text-base font-bold text-white tabular-nums">
                             {dayNum}
                           </span>
                         </div>
 
                         <Link
                           href={href}
-                          className="w-12 h-17 shrink-0 border border-[#333333] bg-[#222222] overflow-hidden"
+                          className="w-12 h-17 shrink-0 rounded-[3px] border border-[#333333] bg-[#222222] overflow-hidden"
                         >
                           {entry.novel.coverUrl && (
                             <img

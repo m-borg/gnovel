@@ -31,17 +31,18 @@ export function Navbar() {
   const [logOpen, setLogOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [navSearch, setNavSearch] = useState("");
+  const [navScope, setNavScope] = useState<"all" | "comics" | "manga" | "curated">("all");
 
   const trackedCount = mounted ? Object.keys(state.library).length : 0;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const q = navSearch.trim();
-    if (q) {
-      router.push(`/?q=${encodeURIComponent(q)}`);
-    } else {
-      router.push("/");
-    }
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (navScope !== "all") params.set("scope", navScope);
+    const qs = params.toString();
+    router.push(qs ? `/?${qs}` : "/");
   };
 
   return (
@@ -105,8 +106,8 @@ export function Navbar() {
           </div>
 
           {/* Signature MAL Royal Blue Navigation Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#2E51A2] px-2.5 py-1.5">
-            <nav className="flex items-center gap-1 overflow-x-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#2E51A2] px-2.5 py-1.5 rounded-t-[2px]">
+            <nav className="flex items-center gap-0.5 overflow-x-auto">
               {BLUE_BAR_LINKS.map((item) => {
                 const active =
                   item.href === "/"
@@ -117,10 +118,10 @@ export function Navbar() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "shrink-0 px-2.5 py-1 text-xs font-bold tracking-tight transition-colors rounded-[2px]",
+                      "shrink-0 px-2.5 py-1 text-xs font-bold tracking-tight transition-colors rounded-[3px]",
                       active
                         ? "bg-[#1A3168] text-white"
-                        : "text-white/90 hover:bg-[#3B61BA] hover:text-white"
+                        : "text-white/95 hover:bg-[#3B61BA] hover:text-white"
                     )}
                   >
                     {item.label}
@@ -128,12 +129,12 @@ export function Navbar() {
                 );
               })}
               <Link
-                href="/novel/?id=watchmen"
+                href="/novel/?id=akira"
                 className={cn(
-                  "hidden md:inline-block shrink-0 px-2.5 py-1 text-xs font-bold tracking-tight transition-colors rounded-[2px]",
+                  "hidden md:inline-block shrink-0 px-2.5 py-1 text-xs font-bold tracking-tight transition-colors rounded-[3px]",
                   pathname.startsWith("/novel")
                     ? "bg-[#1A3168] text-white"
-                    : "text-white/80 hover:bg-[#3B61BA] hover:text-white"
+                    : "text-white/85 hover:bg-[#3B61BA] hover:text-white"
                 )}
               >
                 <span className="inline-flex items-center gap-1">
@@ -145,19 +146,34 @@ export function Navbar() {
 
             <form
               onSubmit={handleSearchSubmit}
-              className="flex items-center gap-1 sm:w-72"
+              className="flex items-center sm:w-[340px] rounded-[3px] overflow-hidden border border-[#1B336B] bg-[#141414]"
             >
+              <select
+                value={navScope}
+                onChange={(e) =>
+                  setNavScope(
+                    e.target.value as "all" | "comics" | "manga" | "curated"
+                  )
+                }
+                aria-label="Search scope"
+                className="h-7 shrink-0 border-r border-[#2C2C2C] bg-[#1D1D1D] px-2 text-[11px] font-medium text-[#E5E5E5] focus:outline-none"
+              >
+                <option value="all">All</option>
+                <option value="comics">Comics &amp; GNs</option>
+                <option value="manga">Manga &amp; Manhwa</option>
+                <option value="curated">Curated Top</option>
+              </select>
               <input
                 type="search"
                 value={navSearch}
                 onChange={(e) => setNavSearch(e.target.value)}
-                placeholder="Search Graphic Novels, Manga..."
-                className="h-7 w-full rounded-[2px] border border-[#1B336B] bg-[#141414] px-2.5 text-xs text-white placeholder:text-[#8A8A8A] focus:outline-none focus:border-[#8EB4FF]"
+                placeholder="Search Graphic Novels, Manga, and more..."
+                className="h-7 w-full bg-[#141414] px-2.5 text-xs text-white placeholder:text-[#8A8A8A] focus:outline-none"
               />
               <button
                 type="submit"
                 aria-label="Search"
-                className="flex h-7 w-8 shrink-0 items-center justify-center rounded-[2px] border border-[#1B336B] bg-[#203B7D] text-white hover:bg-[#192F64] transition-colors"
+                className="flex h-7 w-8 shrink-0 items-center justify-center border-l border-[#2C2C2C] bg-[#222222] text-white hover:bg-[#333333] transition-colors"
               >
                 <Search className="h-3.5 w-3.5" />
               </button>

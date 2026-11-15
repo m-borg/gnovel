@@ -1,4 +1,9 @@
-export type NovelFormat = "Series" | "Graphic Novel" | "Omnibus" | "Manga";
+export type NovelFormat =
+  | "Series"
+  | "Graphic Novel"
+  | "Omnibus"
+  | "Manga"
+  | "Manhwa";
 
 export type ReadingStatus =
   | "none"
@@ -20,9 +25,20 @@ export interface IssueItem {
   date?: string;
 }
 
+export interface RelatedWorkItem {
+  id: string;
+  href: string;
+  relation: string;
+  title: string;
+  format: string;
+  coverUrl: string;
+}
+
 export interface GraphicNovel {
   id: string;
   olKey?: string;
+  anilistId?: number;
+  sourceLabel?: string;
   title: string;
   subtitle?: string;
   altTitles?: string[];
@@ -32,6 +48,7 @@ export interface GraphicNovel {
   year: number;
   publicationStatus?: "Finished" | "Publishing";
   issues?: number;
+  volumes?: number;
   pages?: number;
   format: NovelFormat;
   genres: string[];
@@ -39,6 +56,7 @@ export interface GraphicNovel {
   synopsis: string;
   background?: string;
   issuesList?: IssueItem[];
+  relatedEntries?: RelatedWorkItem[];
   coverUrl: string;
   communityScore: number; // 0-10 MAL scale (e.g. 9.24)
   ratingsCount: number;

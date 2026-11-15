@@ -94,7 +94,7 @@ export default function ListsPage() {
         <button
           type="button"
           onClick={() => setCreateOpen(!createOpen)}
-          className="inline-flex items-center gap-1 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
+          className="inline-flex items-center gap-1 rounded-[3px] bg-[#2E51A2] hover:bg-[#3A62BE] px-2.5 py-1 text-xs font-semibold text-white"
         >
           <Plus className="h-3.5 w-3.5" />
           New Custom List
@@ -153,7 +153,7 @@ export default function ListsPage() {
               </Button>
               <button
                 type="submit"
-                className="px-3 h-8 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold"
+                className="px-3 h-8 rounded-[3px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold"
               >
                 Create List
               </button>

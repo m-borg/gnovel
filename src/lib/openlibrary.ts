@@ -11,6 +11,9 @@ interface OLSearchDoc {
   publisher?: string[];
   number_of_pages_median?: number;
   edition_count?: number;
+  ratings_average?: number;
+  ratings_count?: number;
+  readinglog_count?: number;
 }
 
 interface OLWorkDetail {
@@ -95,6 +98,117 @@ export function getCachedNovel(id: string): GraphicNovel | undefined {
   }
 }
 
+export interface CatalogBrowseResult {
+  items: GraphicNovel[];
+  totalFound: number;
+  page: number;
+  perPage: number;
+}
+
+export type OpenLibraryCategory =
+  | "all"
+  | "superhero"
+  | "scifi"
+  | "horror"
+  | "noir"
+  | "memoir";
+
+export type CatalogSortMode = "score" | "popularity" | "newest";
+
+function mapOlDocToNovel(doc: OLSearchDoc, rankHint?: number): GraphicNovel {
+  const olId = extractOlId(doc.key);
+  const writers = doc.author_name?.slice(0, 2) || ["Unknown Creator"];
+  const score10 = doc.ratings_average
+    ? Number(Math.min(9.9, Math.max(4.5, doc.ratings_average * 2)).toFixed(2))
+    : 7.85;
+  const members =
+    doc.readinglog_count ||
+    Math.max((doc.edition_count || 1) * 180, (doc.ratings_count || 5) * 12);
+
+  const novel: GraphicNovel = {
+    id: `ol-${olId}`,
+    olKey: olId,
+    sourceLabel: "Open Library",
+    title: doc.title,
+    subtitle: doc.subtitle,
+    writers,
+    artists: writers,
+    publisher: doc.publisher?.[0] || "Independent / Archive",
+    year: doc.first_publish_year || 0,
+    publicationStatus: "Finished",
+    pages: doc.number_of_pages_median,
+    format: inferFormat(doc.subject, doc.title),
+    genres: cleanGenres(doc.subject),
+    deck:
+      doc.subtitle ||
+      `Archived graphic novel work (${doc.edition_count || 1} known editions on Open Library).`,
+    synopsis:
+      "Loaded from the Open Library community archive. Open this entry to view live community ratings, published editions, and synopsis.",
+    coverUrl: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
+    communityScore: score10,
+    ratingsCount: doc.ratings_count || (doc.edition_count || 1) * 24,
+    membersCount: members,
+    ranked: rankHint,
+    isCurated: false,
+  };
+  cacheNovelSnapshot(novel);
+  return novel;
+}
+
+export async function browseOpenLibraryCatalog({
+  category = "all",
+  sort = "score",
+  page = 1,
+  perPage = 48,
+  signal,
+}: {
+  category?: OpenLibraryCategory;
+  sort?: CatalogSortMode;
+  page?: number;
+  perPage?: number;
+  signal?: AbortSignal;
+}): Promise<CatalogBrowseResult> {
+  const exclusions =
+    'NOT subject:"Drama" NOT subject:"Plays" NOT subject:"Classic Literature" NOT subject:"Study guides" NOT subject:"Criticism and interpretation" NOT subject:"Greg Heffley (Fictitious character)"';
+
+  const categoryClauses: Record<OpenLibraryCategory, string> = {
+    all: '(subject:"Graphic novels" OR subject:"Comic books, strips, etc.")',
+    superhero: '(subject:"Superheroes" AND (subject:"Comic books, strips, etc." OR subject:"Graphic novels"))',
+    scifi: '((subject:"Science fiction comic books, strips, etc." OR (subject:"Graphic novels" AND subject:"Science fiction")))',
+    horror: '((subject:"Horror comic books, strips, etc." OR (subject:"Graphic novels" AND subject:"Horror")))',
+    noir: '((subject:"Graphic novels" AND (subject:"Mystery" OR subject:"Crime" OR subject:"Detective")))',
+    memoir: '((subject:"Graphic novels" AND (subject:"Biography" OR subject:"Memoir" OR subject:"History")))',
+  };
+
+  const sortParam =
+    sort === "popularity"
+      ? "readinglog"
+      : sort === "newest"
+      ? "new"
+      : "rating";
+
+  const q = `${categoryClauses[category]} ${exclusions}`;
+  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
+    q
+  )}&sort=${sortParam}&limit=${perPage}&page=${page}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error("Open Library browse failed");
+  const data = await res.json();
+  const docs: OLSearchDoc[] = data.docs || [];
+
+  const items = docs
+    .filter((d) => d.key && d.title && d.cover_i)
+    .map((doc, idx) => mapOlDocToNovel(doc, (page - 1) * perPage + idx + 1));
+
+  return {
+    items,
+    totalFound: data.numFound || items.length,
+    page,
+    perPage,
+  };
+}
+
 export async function searchOpenLibrary(
   query: string,
   comicsOnly = true,
@@ -104,12 +218,12 @@ export async function searchOpenLibrary(
   if (!trimmed) return [];
 
   const q = comicsOnly
-    ? `${trimmed} subject:(comics OR "graphic novels" OR manga)`
+    ? `${trimmed} (subject:"Comic books, strips, etc." OR subject:"Graphic novels" OR subject:"Manga")`
     : trimmed;
 
   const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
     q
-  )}&limit=18&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count`;
+  )}&limit=24&fields=key,title,subtitle,author_name,first_publish_year,cover_i,subject,publisher,number_of_pages_median,edition_count,ratings_average,ratings_count,readinglog_count`;
 
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error("Open Library search failed");
@@ -122,37 +236,8 @@ export async function searchOpenLibrary(
 
   return docs
     .filter((d) => d.key && d.title && d.cover_i)
-    .slice(0, 15)
-    .map((doc) => {
-      const olId = extractOlId(doc.key);
-      const writers = doc.author_name?.slice(0, 2) || ["Unknown Creator"];
-      const novel: GraphicNovel = {
-        id: `ol-${olId}`,
-        olKey: olId,
-        title: doc.title,
-        subtitle: doc.subtitle,
-        writers,
-        artists: writers,
-        publisher: doc.publisher?.[0] || "Independent / Archive",
-        year: doc.first_publish_year || 0,
-        publicationStatus: "Finished",
-        pages: doc.number_of_pages_median,
-        format: inferFormat(doc.subject, doc.title),
-        genres: cleanGenres(doc.subject),
-        deck:
-          doc.subtitle ||
-          `Archived graphic novel work (${doc.edition_count || 1} known editions on Open Library).`,
-        synopsis:
-          "Loaded from the Open Library community archive. Open this entry to view live community ratings, published editions, and synopsis.",
-        coverUrl: `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg`,
-        communityScore: 7.85,
-        ratingsCount: (doc.edition_count || 1) * 45,
-        membersCount: (doc.edition_count || 1) * 180,
-        isCurated: false,
-      };
-      cacheNovelSnapshot(novel);
-      return novel;
-    });
+    .slice(0, 20)
+    .map((doc) => mapOlDocToNovel(doc));
 }
 
 export async function fetchOpenLibraryWork(

@@ -5,6 +5,7 @@ import { X, Search, Heart, RotateCcw, EyeOff, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "./StarRating";
+import { browseAniList } from "@/lib/anilist";
 import { CURATED_NOVELS } from "@/lib/catalog";
 import { searchOpenLibrary } from "@/lib/openlibrary";
 import { STATUS_OPTIONS } from "@/lib/status";
@@ -86,8 +87,20 @@ function LogModalBody({
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const res = await searchOpenLibrary(trimmed, true, controller.signal);
-        setRemoteResults(res.slice(0, 6));
+        const [olRes, alRes] = await Promise.allSettled([
+          searchOpenLibrary(trimmed, true, controller.signal),
+          browseAniList({
+            query: trimmed,
+            page: 1,
+            perPage: 5,
+            signal: controller.signal,
+          }),
+        ]);
+        const merged = [
+          ...(olRes.status === "fulfilled" ? olRes.value.slice(0, 4) : []),
+          ...(alRes.status === "fulfilled" ? alRes.value.items.slice(0, 4) : []),
+        ];
+        setRemoteResults(merged);
       } catch {
         // Ignore abort
       } finally {
@@ -282,7 +295,7 @@ function LogModalBody({
                 <select
                   value={edition}
                   onChange={(e) => setEdition(e.target.value as EditionFormat)}
-                  className="w-full h-8 rounded-[2px] border border-[#333333] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                  className="w-full h-8 rounded-[3px] border border-[#333333] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
                 >
                   {EDITIONS.map((ed) => (
                     <option key={ed} value={ed}>
@@ -304,7 +317,7 @@ function LogModalBody({
                     type="button"
                     onClick={() => setStatus(opt.value)}
                     className={cn(
-                      "px-2.5 py-1 rounded-[2px] text-xs font-medium border transition-colors",
+                      "px-2.5 py-1 rounded-[3px] text-xs font-medium border transition-colors",
                       status === opt.value
                         ? opt.badgeClass
                         : "border-[#333333] bg-[#141414] text-[#9B9B9B] hover:text-white"
@@ -316,7 +329,7 @@ function LogModalBody({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border border-[#2C2C2C] bg-[#141414] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#2C2C2C] bg-[#141414] p-3">
               <div className="space-y-1">
                 <span className="text-[11px] font-semibold text-[#9B9B9B] block">
                   Your Score (1–10)
@@ -329,7 +342,7 @@ function LogModalBody({
                   type="button"
                   onClick={() => setLiked(!liked)}
                   className={cn(
-                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-[2px] border text-xs font-medium",
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-[3px] border text-xs font-medium",
                     liked
                       ? "bg-[#FB7185]/15 border-[#FB7185]/40 text-[#FB7185]"
                       : "bg-[#1C1C1C] border-[#333333] text-[#9B9B9B] hover:text-white"
@@ -343,7 +356,7 @@ function LogModalBody({
                   type="button"
                   onClick={() => setReread(!reread)}
                   className={cn(
-                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-[2px] border text-xs font-medium",
+                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-[3px] border text-xs font-medium",
                     reread
                       ? "bg-[#2E51A2]/30 border-[#4C74D6]/50 text-[#8EB4FF]"
                       : "bg-[#1C1C1C] border-[#333333] text-[#9B9B9B] hover:text-white"
@@ -369,9 +382,9 @@ function LogModalBody({
                     onChange={(e) =>
                       setIssuesRead(Math.max(0, parseInt(e.target.value, 10) || 0))
                     }
-                    className="w-16 h-7 text-center bg-[#121212] border-[#333333] font-mono text-xs"
+                    className="w-16 h-7 text-center rounded-[3px] bg-[#121212] border-[#333333] text-xs tabular-nums"
                   />
-                  <span className="text-[#9B9B9B] font-mono">
+                  <span className="text-[#9B9B9B] tabular-nums">
                     / {selectedNovel.issues}
                   </span>
                 </div>
@@ -400,7 +413,7 @@ function LogModalBody({
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
                 placeholder="Write a review or reading note..."
-                className="w-full border border-[#333333] bg-[#121212] p-2.5 text-xs text-white placeholder:text-[#666666] focus:outline-none focus:border-[#4C74D6] resize-none"
+                className="w-full rounded-[3px] border border-[#333333] bg-[#121212] p-2.5 text-xs text-white placeholder:text-[#666666] focus:outline-none focus:border-[#4C74D6] resize-none"
               />
             </div>
 
@@ -410,7 +423,7 @@ function LogModalBody({
               </Button>
               <button
                 type="submit"
-                className="h-8 px-4 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold"
+                className="h-8 px-4 rounded-[3px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold"
               >
                 Save Entry
               </button>

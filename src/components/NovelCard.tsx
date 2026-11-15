@@ -19,6 +19,9 @@ export function getNovelHref(novel: GraphicNovel): string {
   if (novel.isCurated) {
     return `/novel/?id=${encodeURIComponent(novel.id)}`;
   }
+  if (novel.anilistId) {
+    return `/novel/?al=${encodeURIComponent(String(novel.anilistId))}`;
+  }
   const ol = novel.olKey || novel.id.replace(/^ol-/, "");
   return `/novel/?ol=${encodeURIComponent(ol)}`;
 }
@@ -36,7 +39,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
       <Link
         href={href}
         onClick={() => cacheNovelSnapshot(novel)}
-        className="relative aspect-[2/3] w-full overflow-hidden border border-[#2C2C2C] bg-[#1C1C1C] transition-colors group-hover:border-[#4C74D6]"
+        className="relative aspect-[2/3] w-full overflow-hidden rounded-[4px] border border-[#2C2C2C] bg-[#1C1C1C] transition-colors group-hover:border-[#4C74D6]"
       >
         {novel.coverUrl && !imgError ? (
           <img
@@ -48,7 +51,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
           />
         ) : (
           <div className="flex h-full w-full flex-col justify-between bg-[#1A1A1A] p-3">
-            <span className="text-[10px] font-mono uppercase text-[#8EB4FF]">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8EB4FF]">
               {novel.format}
             </span>
             <div>
@@ -64,7 +67,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
 
         {/* Top-left rank or score */}
         {rank !== undefined ? (
-          <div className="absolute top-1.5 left-1.5 bg-[#2E51A2] px-1.5 py-0.5 font-mono text-[10px] font-bold text-white shadow">
+          <div className="absolute top-1.5 left-1.5 rounded-[3px] bg-[#2E51A2]/95 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">
             #{rank}
           </div>
         ) : null}
@@ -73,7 +76,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
         {statusMeta && (
           <div
             className={cn(
-              "absolute top-1.5 right-1.5 flex items-center gap-1 border px-1.5 py-0.5 text-[10px] font-bold bg-black/85",
+              "absolute top-1.5 right-1.5 flex items-center gap-1 rounded-[3px] border px-1.5 py-0.5 text-[10px] font-bold bg-black/85",
               statusMeta.badgeClass
             )}
           >
@@ -84,7 +87,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
 
         {/* Quick action bar */}
         <div
-          className="absolute inset-x-1.5 bottom-1.5 z-20 flex items-center justify-between gap-1 bg-black/85 p-1 opacity-0 border border-[#333333] transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          className="absolute inset-x-1.5 bottom-1.5 z-20 flex items-center justify-between gap-1 rounded-[4px] bg-black/85 p-1 opacity-0 border border-[#333333] transition-opacity group-hover:opacity-100 focus-within:opacity-100"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -95,7 +98,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
             title="Mark Completed"
             onClick={() => setStatus(novel, "completed")}
             className={cn(
-              "flex flex-1 items-center justify-center py-1 rounded-[2px]",
+              "flex flex-1 items-center justify-center py-1 rounded-[3px]",
               entry?.status === "completed"
                 ? "bg-[#2E51A2] text-white"
                 : "text-[#CCCCCC] hover:bg-white/10"
@@ -109,7 +112,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
             title="Favorite"
             onClick={() => toggleLike(novel)}
             className={cn(
-              "flex flex-1 items-center justify-center py-1 rounded-[2px]",
+              "flex flex-1 items-center justify-center py-1 rounded-[3px]",
               entry?.liked
                 ? "bg-[#FB7185]/20 text-[#FB7185]"
                 : "text-[#CCCCCC] hover:bg-white/10"
@@ -123,7 +126,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
             title="Plan to Read"
             onClick={() => setStatus(novel, "plan")}
             className={cn(
-              "flex flex-1 items-center justify-center py-1 rounded-[2px]",
+              "flex flex-1 items-center justify-center py-1 rounded-[3px]",
               entry?.status === "plan"
                 ? "bg-[#757575]/30 text-white"
                 : "text-[#CCCCCC] hover:bg-white/10"
@@ -137,7 +140,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
               type="button"
               title="Log / Review"
               onClick={() => onLogClick(novel)}
-              className="flex flex-1 items-center justify-center py-1 rounded-[2px] text-[#8EB4FF] hover:bg-[#2E51A2]/40"
+              className="flex flex-1 items-center justify-center py-1 rounded-[3px] text-[#8EB4FF] hover:bg-[#2E51A2]/40"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -160,7 +163,7 @@ export function NovelCard({ novel, onLogClick, rank }: NovelCardProps) {
             {novel.year ? ` · ${novel.year}` : ""}
           </span>
 
-          <span className="inline-flex items-center gap-0.5 font-mono text-[11px] text-[#FACC15] shrink-0">
+          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#FACC15] shrink-0 tabular-nums">
             <Star className="h-3 w-3 fill-[#FACC15] text-[#FACC15]" />
             {entry && entry.rating > 0 ? `${entry.rating}/10` : novel.communityScore.toFixed(2)}
           </span>

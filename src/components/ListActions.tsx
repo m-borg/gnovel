@@ -41,10 +41,11 @@ export function ListActions({ novel }: ListActionsProps) {
   const [newListName, setNewListName] = useState("");
   const [editingLink, setEditingLink] = useState(false);
   const [linkDraft, setLinkDraft] = useState("");
+  const [savedNotice, setSavedNotice] = useState(false);
 
   if (!mounted) {
     return (
-      <div className="border border-[#2C2C2C] bg-[#181818] p-3 h-48 animate-pulse" />
+      <div className="rounded-[4px] border border-[#2C2C2C] bg-[#181818] p-3 h-48 animate-pulse" />
     );
   }
 
@@ -83,23 +84,27 @@ export function ListActions({ novel }: ListActionsProps) {
 
   return (
     <>
-      <div className="space-y-3 text-xs">
-        {/* MAL "Edit Status" Box */}
-        <div className="border border-[#2E2E2E] bg-[#1A1A1A]">
-          <div className="border-b border-[#2E2E2E] bg-[#222222] px-2.5 py-1.5 font-bold text-[#E5E5E5]">
+      <div className="space-y-2.5 text-xs">
+        {/* MAL "Edit Status" Block */}
+        <div className="rounded-[4px] border border-[#2C2C2C] bg-[#181818] p-2.5 space-y-2">
+          <div className="border-b border-[#2C2C2C] pb-1 font-bold text-[#E5E5E5]">
             Edit Status
           </div>
 
-          <div className="p-2.5 space-y-2.5">
+          <p className="text-[11px] text-[#D86C6C]">
+            * Your list is saved locally.
+          </p>
+
+          <div className="space-y-2">
             {/* Status Row */}
             <div className="grid grid-cols-[74px_1fr] items-center gap-2">
-              <label className="text-[#9B9B9B]">Status:</label>
+              <label className="text-[#B0B0B0]">Status:</label>
               <select
                 value={currentStatus}
                 onChange={(e) => handleStatusSelect(e.target.value)}
-                className="h-7 w-full rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                className="h-7 w-full rounded-[3px] border border-[#3A3A3A] bg-[#1D1D1D] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
               >
-                <option value="none">Not on Shelf</option>
+                <option value="none">Add to Shelf</option>
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -108,10 +113,12 @@ export function ListActions({ novel }: ListActionsProps) {
               </select>
             </div>
 
-            {/* Issues Read Row */}
+            {/* Issues / Chap. Read Row */}
             <div className="grid grid-cols-[74px_1fr] items-center gap-2">
-              <label className="text-[#9B9B9B]">
-                {novel.issues ? "Issues:" : "Chapters:"}
+              <label className="text-[#B0B0B0]">
+                {novel.format === "Manga" || novel.format === "Manhwa"
+                  ? "Chap. Read:"
+                  : "Issues Read:"}
               </label>
               <div className="flex items-center gap-1">
                 <input
@@ -122,9 +129,9 @@ export function ListActions({ novel }: ListActionsProps) {
                   onChange={(e) =>
                     setProgress(novel, Math.max(0, parseInt(e.target.value, 10) || 0))
                   }
-                  className="h-7 w-14 rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-1.5 text-center font-mono text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                  className="h-7 w-14 rounded-[3px] border border-[#3A3A3A] bg-[#1D1D1D] px-1.5 text-center text-xs text-white tabular-nums focus:outline-none focus:border-[#4C74D6]"
                 />
-                <span className="font-mono text-[#9B9B9B]">
+                <span className="text-[#B0B0B0] tabular-nums">
                   / {totalIssues || "?"}
                 </span>
                 <button
@@ -136,20 +143,27 @@ export function ListActions({ novel }: ListActionsProps) {
                       totalIssues ? Math.min(totalIssues, issuesRead + 1) : issuesRead + 1
                     )
                   }
-                  className="ml-auto flex h-7 w-7 items-center justify-center rounded-[2px] border border-[#3A3A3A] bg-[#222222] text-white hover:bg-[#2E51A2] transition-colors"
+                  className="ml-auto flex h-6 w-6 items-center justify-center rounded-[3px] border border-[#3A3A3A] bg-[#242424] text-[#CCCCCC] hover:bg-[#2E51A2] hover:text-white transition-colors"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-3 w-3" />
                 </button>
               </div>
             </div>
 
+            {novel.volumes && (
+              <div className="grid grid-cols-[74px_1fr] items-center gap-2">
+                <span className="text-[#B0B0B0]">Volumes:</span>
+                <span className="text-[#E5E5E5] tabular-nums">{novel.volumes}</span>
+              </div>
+            )}
+
             {/* Your Score Row */}
             <div className="grid grid-cols-[74px_1fr] items-center gap-2">
-              <label className="text-[#9B9B9B]">Your Score:</label>
+              <label className="text-[#B0B0B0]">Your Score:</label>
               <select
                 value={currentRating}
                 onChange={(e) => setRating(novel, Number(e.target.value))}
-                className="h-7 w-full rounded-[2px] border border-[#3A3A3A] bg-[#121212] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
+                className="h-7 w-full rounded-[3px] border border-[#3A3A3A] bg-[#1D1D1D] px-2 text-xs text-white focus:outline-none focus:border-[#4C74D6]"
               >
                 <option value={0}>Select</option>
                 {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => (
@@ -160,16 +174,36 @@ export function ListActions({ novel }: ListActionsProps) {
               </select>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-1.5 pt-1">
-              <button
-                type="button"
-                onClick={() => setLogOpen(true)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 h-7 rounded-[2px] bg-[#2E51A2] hover:bg-[#3A62BE] text-white font-semibold transition-colors"
-              >
-                <NotebookPen className="h-3.5 w-3.5" />
-                Log / Review
-              </button>
+            {/* MAL Submit / Update + Edit Details Row */}
+            <div className="grid grid-cols-[74px_1fr] items-center gap-2 pt-0.5">
+              <span />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentStatus === "none") {
+                      setStatus(novel, "plan");
+                    }
+                    setSavedNotice(true);
+                    setTimeout(() => setSavedNotice(false), 1600);
+                  }}
+                  className="h-6 rounded-[3px] bg-[#4065BA] hover:bg-[#4E77D4] px-2.5 text-[11px] font-bold text-white transition-colors"
+                >
+                  {savedNotice
+                    ? "Saved!"
+                    : currentStatus === "none"
+                    ? "Submit"
+                    : "Update"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLogOpen(true)}
+                  className="inline-flex items-center gap-1 text-[11px] mal-link"
+                >
+                  <NotebookPen className="h-3 w-3" />
+                  Edit Details
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -248,7 +282,7 @@ export function ListActions({ novel }: ListActionsProps) {
                   />
                   <button
                     type="submit"
-                    className="px-2 h-7 rounded-[2px] bg-[#2E51A2] text-white text-xs font-semibold shrink-0"
+                    className="px-2.5 h-7 rounded-[3px] bg-[#2E51A2] text-white text-xs font-semibold shrink-0"
                   >
                     Add
                   </button>
